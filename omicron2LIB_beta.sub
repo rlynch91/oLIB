@@ -1,0 +1,11 @@
+universe     = vanilla
+accounting_group = ligo.prod.o1.burst.allsky.omicron_lib
+executable   = /home/ryan.lynch/2nd_pipeline/pipeline_beta/Omicron_2_LIB_beta.py 
+arguments    = $(macroarguments)
+getenv	     = True
+log          = /usr1/ryan.lynch/logs/log.omicron2LIB 
+output       = RUNDIR/log/$(macroid).out
+error        = RUNDIR/log/$(macroid).err
+notification = never
+queue 1
+

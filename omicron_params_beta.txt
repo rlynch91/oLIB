@@ -1,0 +1,79 @@
+//*************************************************************************************
+//************************   Omicron configuration file   *****************************
+//*************************************************************************************
+
+//*************************************************************************************
+//************************           INPUT DATA           *****************************
+//*************************************************************************************
+
+//** full path to CACHE file pointing to frame files
+DATA    LCF	FRAMECACHE
+
+//** list of channels you want to process
+DATA    CHANNELS        IFO:CHNAME
+
+//** native sampling frequency (Hz) of working channels (as many as the number of input channels)
+DATA    NATIVEFREQUENCY 16384
+
+//** working sampling (one value for all channels)
+DATA    SAMPLEFREQUENCY 4096
+
+//*************************************************************************************
+//************************        SEARCH PARAMETERS      *****************************
+//*************************************************************************************
+
+//** chunk duration in seconds (must be an integer)
+PARAMETER       CHUNKDURATION   STRIDE
+
+//** segment duration in seconds (must be an integer)
+PARAMETER       BLOCKDURATION   4
+
+//** overlap duration between segments in seconds (must be an integer)
+PARAMETER       OVERLAPDURATION   OLAP 
+
+//** search frequency range
+PARAMETER       FREQUENCYRANGE  32      2048
+
+//** search Q range
+PARAMETER       QRANGE          3.3166  141
+
+//** maximal mismatch between 2 consecutive tiles (0<MM<1)
+//** for dark-fringe channel, 0.2 is a good value
+//** for auxiliary channels,  0.4 is a good value (faster)
+PARAMETER       MISMATCHMAX     0.2
+
+//*************************************************************************************
+//************************            TRIGGERS           *****************************
+//*************************************************************************************
+
+//** tile SNR threshold
+TRIGGER         SNRTHRESHOLD    5.5
+
+//** maximum number of triggers per file
+TRIGGER         NMAX            1000000
+
+//** clustering on
+//TRIGGER         CLUSTERING      TIME
+
+//*************************************************************************************
+//************************             OUTPUT            *****************************
+//*************************************************************************************
+
+//** full path to output directory
+OUTPUT  DIRECTORY	RAWDIR
+
+//** full path to output directory
+OUTPUT  FORMAT                  txt
+
+//** verbosity level (0-1-2-3)
+OUTPUT  VERBOSITY               0
+
+//** flag to save PSDs
+OUTPUT  WRITEPSD                0
+
+//** flag to save data time series
+OUTPUT  WRITETIMESERIES         0
+
+//** flag to save whitened data time series
+OUTPUT  WRITEWHITENEDDATA       0
+

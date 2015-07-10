@@ -1,0 +1,11 @@
+universe     = vanilla
+accounting_group = ligo.prod.o1.burst.allsky.omicron_lib
+executable   = /home/detchar/opt/virgosoft/Omicron/v1r3/Linux-x86_64/omicron.exe
+arguments    = $(macroarguments)
+getenv	     = True
+log          = /usr1/ryan.lynch/logs/log.IFO.omicron 
+output       = RUNDIR/log/$(macroid).out
+error        = RUNDIR/log/$(macroid).err
+notification = never
+queue 1
+
