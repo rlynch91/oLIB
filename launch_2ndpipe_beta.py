@@ -22,6 +22,7 @@ wait = 5  #Wait stride between serches for new data (in s)
 max_wait = 1200  #Maximum wait interval before skipping data and moving on
 gdb_flag = False  #Upload to GraceDB if True
 LIB_flag = True  #Run LIB portion of oLIB if true
+#!#LIB_followup_flag = False
 t_shift_start = -20  #Maximum "leftward" timeslide shift (in s)
 t_shift_stop = 20  #Maximum "rightward" timeslide shift (in s)
 t_shift_num = 41  #Number of timeslides in total
@@ -38,6 +39,7 @@ oLIB_noise_kde_coords = '/home/ryan.lynch/2nd_pipeline/pipeline_beta/BSN_and_BCI
 oLIB_noise_kde_values = '/home/ryan.lynch/2nd_pipeline/pipeline_beta/BSN_and_BCI_and_oSNR_Noise_KDE_values.npy'
 bitmask = 8
 inj_runmode = "NonInj"
+#!#train_runmode = "None" #either Signal, Noise, None
 
 #Decide what time to start running on
 if os.path.exists(rundir+'/current_start.txt'):
