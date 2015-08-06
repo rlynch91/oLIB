@@ -25,26 +25,31 @@ class LLRT(object):
 	"""
 	
 	###
-	def __init__(self, calc_info, param_info, train_signal_data, train_noise_data, foreground_data=None, background_data=None):
+	def __init__(self, calc_info, param_info, train_signal_data, train_noise_data, foreground_data=None, background_data=None, optimize_signal_training=None, optimize_noise_training=None):
 		"""
 		*The calc_info option should be a dictionary with the following structure:
 			-['interp method'] --> Method of interpolation to use (i.e, 'Linear', ...)
 			-['extrap method'] --> Method of extrapolation to use (i.e, 'Nearest', ...)
 		
 		*The param_info option should be a dictionary with the following structure:
-			-['group_name']
+			-['group name']
 				*['dimension'] --> Number of parameters in group
 				*['param names'] --> Names of each parameter in group
 				*['interp range'] --> interpolation ranges for each parameter in group
 			
 		*The *_data options should be dictionaries with the following structure:
-			-['npoints'] -->  number of data points (must be passed with data for foreground)
+			-['npoints'] -->  number of data points (must be passed with data for foreground and background)
 			-['param name/group name']
 				*['data'] -->  raw data
 				*['KDE ranges'] --> range over which to do KDE smoothing (must be passed with data for training)
 				*['KDE bandwidths'] --> bandwidth to use for KDE smoothing (must be passed with data for training)
 				*['KDE points'] --> number of points to use for KDE smoothing (must be passed with data for training)
 				*['KDE'] --> Set of KDE-smoothed points to be interpolated among (for training only)
+				
+		*The optimize_*_training options should be dictionaries with the following structure:
+			-['group name']
+				*['optimization grid dimensions'] -->  The number of points to grid over for each parameter in the group
+				*['optimization grid ranges'] -->  The range of values to logarithmically grid over for each parameter in the group
 		"""
 		#Should do necessary checks on passed stuff here
 		
@@ -73,7 +78,7 @@ class LLRT(object):
 				#If not, check to see if we have group data	
 				elif train_signal_data[key].has_key('data'):
 					self.signal[key]['data'] = np.reshape( train_signal_data[key]['data'], (-1,self.signal[key]['dimension']) )
-					self.signal[key]['KDE ranges'] = np.reshape( train_signal_data[key]['KDE ranges'], (-1,2) )
+					self.signal[key]['KDE ranges'] = np.reshape( train_signal_data[key]['KDE ranges'], (self.signal[key]['dimension'],2) )
 					self.signal[key]['KDE bandwidths'] = np.reshape( train_signal_data[key]['KDE bandwidths'], (self.signal[key]['dimension']) ) 
 					self.signal[key]['KDE points'] = np.reshape( train_signal_data[key]['KDE points'], (self.signal[key]['dimension']) )
 			
@@ -90,9 +95,13 @@ class LLRT(object):
 						self.signal[key]['KDE points'][i] = train_signal_data[param]['KDE points']
 				self.signal[key]['data'] = np.array(self.signal[key]['data'])
 				self.signal[key]['data'] = np.reshape( np.transpose(self.signal[key]['data']), (-1,self.signal[key]['dimension']) )
-				self.signal[key]['KDE ranges'] = np.reshape( np.array(self.signal[key]['KDE ranges']), (-1,2) )
+				self.signal[key]['KDE ranges'] = np.reshape( np.array(self.signal[key]['KDE ranges']), (self.signal[key]['dimension'],2) )
 				self.signal[key]['KDE bandwidths'] = np.reshape( np.array(self.signal[key]['KDE bandwidths']), (self.signal[key]['dimension']) )
 				self.signal[key]['KDE points'] = np.reshape( np.array(self.signal[key]['KDE points']), (self.signal[key]['dimension']) )
+			
+			#If flagged, find optimal bandwidths to train with
+			if optimize_signal_training:
+				self.signal[key]['KDE bandwidths'] = self.find_opt_gaussian_band_grid(groupname=key, model="Signal", grid_points=np.reshape( optimize_signal_training[key]['optimization grid dimensions'], (self.signal[key]['dimension']) ), grid_ranges=np.reshape( optimize_signal_training[key]['optimization grid ranges'], (self.signal[key]['dimension'],2) ))
 			
 			#If no KDE data passed, do KDE smoothing
 			if self.signal[key]['KDE'] == None:
@@ -118,7 +127,7 @@ class LLRT(object):
 				#If not, check to see if we have group data	
 				elif train_noise_data[key].has_key('data'):
 					self.noise[key]['data'] = np.reshape( train_noise_data[key]['data'], (-1,self.noise[key]['dimension']) )
-					self.noise[key]['KDE ranges'] = np.reshape( train_noise_data[key]['KDE ranges'], (-1,2) )
+					self.noise[key]['KDE ranges'] = np.reshape( train_noise_data[key]['KDE ranges'], (self.noise[key]['dimension'],2) )
 					self.noise[key]['KDE bandwidths'] = np.reshape( train_noise_data[key]['KDE bandwidths'], (self.noise[key]['dimension']) )
 					self.noise[key]['KDE points'] = np.reshape( train_noise_data[key]['KDE points'], (self.noise[key]['dimension']) )
 			
@@ -135,10 +144,14 @@ class LLRT(object):
 						self.noise[key]['KDE points'][i] = train_noise_data[param]['KDE points']
 				self.noise[key]['data'] = np.array(self.noise[key]['data'])
 				self.noise[key]['data'] = np.reshape( np.transpose(self.noise[key]['data']), (-1,self.noise[key]['dimension']) )
-				self.noise[key]['KDE ranges'] = np.reshape( np.array(self.noise[key]['KDE ranges']), (-1,2) )
+				self.noise[key]['KDE ranges'] = np.reshape( np.array(self.noise[key]['KDE ranges']), (self.noise[key]['dimension'],2) )
 				self.noise[key]['KDE bandwidths'] = np.reshape( np.array(self.noise[key]['KDE bandwidths']), (self.noise[key]['dimension']) )
 				self.noise[key]['KDE points'] = np.reshape( np.array(self.noise[key]['KDE points']), (self.noise[key]['dimension']) )
 		
+			#If flagged, find optimal bandwidths to train with
+			if optimize_noise_training:
+				self.noise[key]['KDE bandwidths'] = self.find_opt_gaussian_band_grid(groupname=key, model="Noise", grid_points=np.reshape( optimize_noise_training[key]['optimization grid dimensions'], (self.noise[key]['dimension']) ), grid_ranges=np.reshape( optimize_noise_training[key]['optimization grid ranges'], (self.noise[key]['dimension'],2) ))
+				
 			#If no KDE data passed, do KDE smoothing
 			if self.noise[key]['KDE'] == None:
 				self.noise[key]['KDE'] = self.KDE_smoothing(model='Noise', groupname=key)
@@ -507,6 +520,33 @@ class LLRT(object):
 			self.save_group_KDE(model='Signal', groupname=group, outdir=outdir)
 			self.save_group_KDE(model='Noise', groupname=group, outdir=outdir)
 	
+	###	
+	def save_group_bandwidths(self, model, groupname, outdir):
+		"""
+		Save KDE bandwidths for a given parameter group for a given model (signal or noise)
+		"""
+		#Load in necessary info for either data or noise depending on the passed model
+		if model == 'Signal':
+			dic = self.signal
+		elif model == 'Noise':
+			dic = self.noise
+		else:
+			#Raise error here
+			pass
+		
+		#Save binary files cotaining both KDE coordinates and KDE values
+		np.save('%s/%s_%s_KDE_bandwidths.npy'%(outdir,groupname,model), dic[groupname]['KDE bandwidths'])
+		
+	###	
+	def save_all_bandwidths(self, outdir):
+		"""
+		Save all KDE bandwidths, for all parameter groups for both signal and noise
+		"""
+		#Iterate over all parameter groups
+		for group in self.group_names:
+			self.save_group_bandwidths(model='Signal', groupname=group, outdir=outdir)
+			self.save_group_bandwidths(model='Noise', groupname=group, outdir=outdir)
+	
 	###		
 	def plot_group_likelihoods(self, groupname, outdir):
 		"""
@@ -710,14 +750,13 @@ class LLRT(object):
 		
 		n_dim = dic[groupname]['dimension']
 		data = dic[groupname]['data']
-		
-		#Find rule-of-thumb estimate of optimal bandwidth for each parameter in the group
-		Ho = np.zeros(n_dim)
-		for d in xrange(n_dim):
-			Ho[d] = self.oneD_rule_of_thumb_bandwidth_gaussian(data[:,d])
-		
+				
 		#Initialize grid 
 		if grid_ranges == None:
+			#Find rule-of-thumb estimate of optimal bandwidth for each parameter in the group
+			Ho = np.zeros(n_dim)
+			for d in xrange(n_dim):
+				Ho[d] = self.oneD_rule_of_thumb_bandwidth_gaussian(data[:,d])
 			grid_ranges = np.zeros((n_dim,2))
 			grid_ranges[:,0] = 0.1*Ho
 			grid_ranges[:,1] = 10.*Ho

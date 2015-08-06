@@ -7,6 +7,8 @@ from ligo.gracedb.rest import GraceDb
 import json
 #from pylal import bayespputils as bppu
 import LLRT_object_beta
+import commands
+import time
 
 #==============================================================
 #Parse user options
@@ -19,6 +21,7 @@ parser.add_option("-I","--IFOs", default=None, type="string", help="Comma separa
 parser.add_option("-r", "--rundir", default=None, type="string", help="Path to run directory containing LIB and LIB_rr folders")
 parser.add_option("-i","--infodir", default=None, type="string", help="Path to info directory (where sub files, etc. are stored)")
 parser.add_option("","--gdb", default=False, action="store_true", help="Write above-threshold events to GraceDb")
+parser.add_option("","--LIB-followup", default=False, action="store_true", help="Run in-depth LIB follow-up on preliminary LIB triggers exceeding FAR threshold")
 parser.add_option("-l","--lib-label", default=None, type="string", help="Title for labeling LIB runs")
 parser.add_option("","--start", default=None, type='int', help="Start time of analysis")
 parser.add_option("","--stride", default=None, type='int', help="Stride length of each segment")
@@ -31,6 +34,8 @@ parser.add_option("","--signal-kde-coords", default=None, type='string', help='P
 parser.add_option("","--signal-kde-values", default=None, type='string', help='Path to file containing values of the KDE likelihood estimate for signals')
 parser.add_option("","--noise-kde-coords", default=None, type='string', help='Path to file containing coodinates of the KDE likelihood estimate for noise')
 parser.add_option("","--noise-kde-values", default=None, type='string', help='Path to file containing values of the KDE likelihood estimate for noise')
+parser.add_option("","--train-runmode", default=None, type='string', help='Either "Signal", "Noise", or "None" depending on if user wants to run in training mode or not')
+parser.add_option("","--LIB-window", default=None, type="float", help="Length of window (in s) for LIB runs")
 
 #--------------------------------------------------------------
 
@@ -40,6 +45,7 @@ ifos = opts.IFOs.split(',')
 rundir = opts.rundir
 infodir = opts.infodir
 gdb_flag = opts.gdb
+LIB_followup_flag = opts.LIB_followup
 lib_label=opts.lib_label
 actual_start = opts.start
 stride = opts.stride
@@ -52,6 +58,8 @@ signal_kde_coords = opts.signal_kde_coords
 signal_kde_values = opts.signal_kde_values
 noise_kde_coords = opts.noise_kde_coords
 noise_kde_values = opts.noise_kde_values
+train_runmode = opts.train_runmode
+LIB_window = opts.LIB_window
 
 #===============================================================
 
@@ -225,17 +233,84 @@ for event, event_LLR in enumerate(event_LLRs):
 
 #Save dictionary
 pickle.dump(dictionary, open('%s/PostProc/LIB_trigs/LIB_%s_dic_%s.pkl'%(rundir, lag, "".join(ifos)),'wt'))
-print dictionary
 
 #---------------------------------------------------------------------------------------
 
-#loop over all events, checking Bayes factors against specified thresholds
+#Prepare for handling triggers exceeding FAR threshold
 rr_trigtimes = open(rundir+'/PostProc/LIB_trigs/LIB_%s_times_rr_%s.txt'%(lag,"".join(ifos)),'wt')
 rr_timeslides = open(rundir+'/PostProc/LIB_trigs/LIB_%s_timeslides_rr_%s.txt'%(lag,"".join(ifos)),'wt')
 e_new = -1  #e_new will mark the event number of the follow-up run
+
+#Check to see if triggers should be collected for noise training
+if (train_runmode == 'Noise') and (lag == 'ts'):
+	#Check to make sure another function isn't currently updating the noise training dictionaries
+	while os.path.isfile('%s/training_dics/new_noise_training_points.pkl_lock'%infodir):
+		time.sleep(5)
+	
+	#Lock noise training dictionaries while updating them
+	os.system('> %s/training_dics/new_noise_training_points.pkl_lock'%infodir)
+	
+	#load noise training dictionary
+	if os.path.isfile('%s/training_dics/new_noise_training_points.pkl'%infodir):
+		noise_train_dic = pickle.load(open('%s/training_dics/new_noise_training_points.pkl'%infodir))
+	else:
+		noise_train_dic = {}
+	
+	#get next event key
+	if len(noise_train_dic.keys()) == 0:
+		noise_train_key = 0
+	else:
+		noise_train_key = np.max(noise_train_dic.keys()) + 1
+
+#Check to see if triggers should be collected for signal training	
+if (train_runmode == 'Signal') and (lag == '0lag'):
+	#Check to make sure another function isn't currently updating the signal training dictionaries
+	while os.path.isfile('%s/training_dics/new_signal_training_points.pkl_lock'%infodir):
+		time.sleep(5)
+	
+	#Lock signal training dictionaries while updating them
+	os.system('> %s/training_dics/new_signal_training_points.pkl_lock'%infodir)
+	
+	#load signal training dictionary
+	if os.path.isfile('%s/training_dics/new_signal_training_points.pkl'%infodir):
+		sig_train_dic = pickle.load(open('%s/training_dics/new_signal_training_points.pkl'%infodir))
+	else:
+		sig_train_dic = {}
+	
+	#get next event key
+	if len(sig_train_dic.keys()) == 0:
+		sig_train_key = 0
+	else:
+		sig_train_key = np.max(sig_train_dic.keys()) + 1
+	
+	#find the time of the training injection
+	inj_time = float(commands.getstatusoutput('ligolw_print %s/training_injections/raw/*.xml -c "time_geocent_gps" -r 0:1'%rundir)[1])
+
+#loop over all events
 for event in dictionary:
+	#if pipeline is in noise training mode, check to see if event is in ts, if so add to training dictionary
+	if (train_runmode == 'Noise') and (lag == 'ts'):
+		#only want to train noise on timeslided events
+		noise_train_dic[noise_train_key] = dictionary[event]
+		noise_train_key += 1
+	
+	#if pipeline is in signal training mode, check to see if signal is found in 0-lag, if so add to training dictionary if most significant event
+	if (train_runmode == 'Signal') and (lag == '0lag'):
+		#Only want to train signal on 0-lag events
+		if np.absolute(inj_time - dictionary[event]['gpstime']) <= 0.5*LIB_window:
+			#LIB needs to have run over at least part of the injection for it to be considered found
+			if signal_train_dic.has_key(signal_train_key):
+				#Found event has already been entered into the training dictionary
+				if signal_train_dic[signal_train_key]['Omicron SNR'] < dictionary[event]['Omicron SNR']:
+					#Update the training dictionary with the found event with the loudest oSNR
+					signal_train_dic[signal_train_key] = dictionary[event]
+			else:
+				#No other events have entered the training dictionary, so enter this one
+				signal_train_dic[signal_train_key] = dictionary[event]
+	
+	#check Bayes factors against specified thresholds
 	if dictionary[event]['FAR'] <= FAR_thresh:			
-		#if FAR threshold is exceeded, write trigtimes and timeslides to files
+		#FAR threshold is exceeded so write trigtimes and timeslides to files
 		e_new += 1
 		rr_trigtimes.write('%s\n'%dictionary[event]['gpstime'])
 		rr_timeslides.write('%s\n'%" ".join([dictionary[event]['timeslides'][ifo] for ifo in ifos]))
@@ -257,10 +332,25 @@ for event in dictionary:
 			#Update GraceDb log with post-proc pages
 #			gdb.writeLog(gid, message="Preliminary results: f_0 = %s, Q = %s"%(dictionary[event]['frequency'],dictionary[event]['quality']))
 			gdb.writeLog(gid, message="Preliminary results: BSN = %s, BCI = %s, oSNR = %s"%(dictionary[event]['BSN'],dictionary[event]['BCI'],dictionary[event]['Omicron SNR']))
-			gdb.writeLog(gid, message="Follow-up results will be written: https://ldas-jobs.ligo.caltech.edu/~ryan.lynch/%s/%s/followup/%s/%s/%s/posplots.html"%(lib_label,lag,'%s_%s_%s'%("".join(ifos),actual_start,stride-overlap),'%s-%s'%(dictionary[event]['gpstime'],e_new),"".join(ifos)))
+			if LIB_followup_flag:
+				gdb.writeLog(gid, message="Follow-up results will be written: https://ldas-jobs.ligo.caltech.edu/~ryan.lynch/%s/%s/followup/%s/%s/%s/posplots.html"%(lib_label,lag,'%s_%s_%s'%("".join(ifos),actual_start,stride-overlap),'%s-%s'%(dictionary[event]['gpstime'],e_new),"".join(ifos)))
 
+#store results of loop over events
 rr_trigtimes.close()
 rr_timeslides.close()
 
+if (train_runmode == 'Noise') and (lag == 'ts'):
+	#Save noise training dicitonary
+	pickle.dump(noise_train_dic, open('%s/training_dics/new_noise_training_points.pkl'%infodir,'wt'))
+	#Unlock noise training dictionaries now that they're updated
+	os.system('rm %s/training_dics/new_noise_training_points.pkl_lock'%infodir)
+	
+if (train_runmode == 'Signal') and (lag == '0lag'):
+	#Save signal training dictionary
+	pickle.dump(signal_train_dic, open('%s/training_dics/new_signal_training_points.pkl'%infodir,'wt'))
+	#Unlock signal training dictionaries now that they're updated
+	os.system('rm %s/training_dics/new_signal_training_points.pkl_lock'%infodir)
+
 #run pipeline to make dag for reruns
-os.system('%s/lalinference_2ndpipe_beta.py %s/runfiles/LIB_%s_reruns_beta.ini -r %s/LIB_%s_rr/ -p /usr1/ryan.lynch/logs/ -g %s/PostProc/LIB_trigs/LIB_%s_times_rr_%s.txt'%(infodir, rundir, lag, rundir, lag, rundir, lag, "".join(ifos)))
+if LIB_followup_flag:
+	os.system('%s/lalinference_2ndpipe_beta.py %s/runfiles/LIB_%s_reruns_beta.ini -r %s/LIB_%s_rr/ -p /usr1/ryan.lynch/logs/ -g %s/PostProc/LIB_trigs/LIB_%s_times_rr_%s.txt'%(infodir, rundir, lag, rundir, lag, rundir, lag, "".join(ifos)))

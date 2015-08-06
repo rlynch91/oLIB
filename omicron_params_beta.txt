@@ -12,6 +12,11 @@ DATA    LCF	FRAMECACHE
 //** list of channels you want to process
 DATA    CHANNELS        IFO:CHNAME
 
+//**INJECTION	CHANNELS	IFO:Science
+
+//**INJECTION	FACTORS         1.0
+
+
 //** native sampling frequency (Hz) of working channels (as many as the number of input channels)
 DATA    NATIVEFREQUENCY 16384
 

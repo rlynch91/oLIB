@@ -23,6 +23,7 @@ parser.add_option("","--channel-names", default=None, type='string', help="Comma
 parser.add_option("","--channel-types", default=None, type='string', help="Comma separated types of channel to run on (for purposes of ligo-data-find) for each ifo")
 parser.add_option("","--gdb", default=False, action="store_true", help="Write above-threshold events to GraceDb")
 parser.add_option("","--LIB", default=False, action="store_true", help="Run LIB to follow up Omicron triggers")
+parser.add_option("","--LIB-followup", default=False, action="store_true", help="Run in-depth LIB follow-up on preliminary LIB triggers exceeding FAR threshold")
 parser.add_option("","--t-shift-start", default=None, type="float", help="Starting time shift to apply to IFO 2")
 parser.add_option("","--t-shift-stop", default=None, type="float", help="Ending time shift to apply to IFO 2")
 parser.add_option("","--t-shift-num", default=None, type="float", help="Number of time shifts to apply to IFO 2")
@@ -37,6 +38,7 @@ parser.add_option("","--oLIB-signal-kde-coords", default=None, type='string', he
 parser.add_option("","--oLIB-signal-kde-values", default=None, type='string', help='Path to file containing values of the KDE likelihood estimate of oLIB for signals')
 parser.add_option("","--oLIB-noise-kde-coords", default=None, type='string', help='Path to file containing coodinates of the KDE likelihood estimate of oLIB for noise')
 parser.add_option("","--oLIB-noise-kde-values", default=None, type='string', help='Path to file containing values of the KDE likelihood estimate of oLIB for noise')
+parser.add_option("","--train-runmode", default=None, type='string', help='Either "Signal", "Noise", or "None" depending on if user wants to run in training mode or not')
 
 #---------------------------------------------
 
@@ -56,6 +58,7 @@ channel_names = opts.channel_names.split(',')
 channel_types = opts.channel_types.split(',')
 gdb_flag = opts.gdb
 LIB_flag = opts.LIB
+LIB_followup_flag = opts.LIB_followup
 t_shift_start = opts.t_shift_start
 t_shift_stop = opts.t_shift_stop
 t_shift_num = opts.t_shift_num
@@ -70,6 +73,7 @@ oLIB_signal_kde_coords = opts.oLIB_signal_kde_coords
 oLIB_signal_kde_values = opts.oLIB_signal_kde_values
 oLIB_noise_kde_coords = opts.oLIB_noise_kde_coords
 oLIB_noise_kde_values = opts.oLIB_noise_kde_values
+train_runmode = opts.train_runmode
 
 #############################################
 
@@ -119,6 +123,8 @@ for i,ifo in enumerate(ifos):
 	os.system('sed -e "s|IFO|%s|g" -e "s|RUNDIR|%s|g" %s/omicron_beta.sub > %s/runfiles/omicron_%s_beta.sub'%(ifo,rundir,infodir,rundir,ifo))
 	#replace all necessary variables in params file
 	os.system('sed -e "s|IFO|%s|g" -e "s|FRAMECACHE|%s|g" -e "s|CHNAME|%s|g" -e "s|OLAP|%s|g" -e "s|STRIDE|%s|g" -e "s|RAWDIR|%s|g" %s/omicron_params_beta.txt > %s/runfiles/omicron_params_%s_beta.txt'%(ifo, cache_files[i], channel_names[i], overlap, stride, rundir+'/raw/'+ifo, infodir, rundir, ifo))
+	if train_runmode == 'Signal':
+		os.system('sed -e "s|//**INJECTION|INJECTION|g" %s/runfiles/omicron_params_%s_beta.txt > %s/tmp.txt; mv %s/tmp.txt %s/runfiles/omicron_params_%s_beta.txt'%(rundir,ifo,rundir,rundir,rundir,ifo))
 
 	#write JOB
 	dagfile.write('JOB %s %s/runfiles/omicron_%s_beta.sub\n'%(job,rundir,ifo))
@@ -182,7 +188,9 @@ if LIB_flag:
 
 	#replace all necessary fields in LIB_runs_beta.ini file
 	os.system('sed -e "s|IFOSCOMMA|%s|g" -e "s|IFOSTOGETHER|%s|g" -e "s|LIBLABEL|%s|g" -e "s|SEGNAME|%s|g" -e "s|RUNDIR|%s|g" -e "s|BINDIR|%s|g" -e "s|CHANNELTYPES|%s|g" -e "s|CHANNELNAMES|%s|g" -e "s|LAG|0lag|g" %s/LIB_runs_beta.ini > %s/runfiles/LIB_0lag_runs_beta.ini'%(ifos,"".join(ifos),lib_label,"%s_%s_%s"%("".join(ifos),actual_start,stride-overlap),rundir,bindir,chtypes_dic,chnames_dic,infodir,rundir))
-
+	if train_runmode == 'Signal':
+		os.system('sed -e "s|START|%s|g" -e "s|STOP|%s|g" -e "s|#mdc|mdc|g" -e "s|#MDC|MDC|g" %s/runfiles/LIB_0lag_runs_beta.ini > %s/tmp.txt; mv %s/tmp.txt %s/runfiles/LIB_0lag_runs_beta.ini'%(actual_start-int(0.5*overlap),actual_start-int(0.5*overlap)+stride,rundir,rundir,rundir,rundir))
+		
 	#Copy lalinference_pipe sub file to rundir
 	os.system('sed "s|RUNDIR|%s|g" %s/lalinference_pipe_beta.sub > %s/runfiles/lalinference_pipe_beta.sub'%(rundir,infodir,rundir))
 
@@ -211,7 +219,9 @@ if LIB_flag:
 
 	#replace all necessary fields in LIB_runs_beta.ini file
 	os.system('sed -e "s|IFOSCOMMA|%s|g" -e "s|IFOSTOGETHER|%s|g" -e "s|LIBLABEL|%s|g" -e "s|SEGNAME|%s|g" -e "s|RUNDIR|%s|g" -e "s|BINDIR|%s|g" -e "s|CHANNELTYPES|%s|g" -e "s|CHANNELNAMES|%s|g" -e "s|LAG|ts|g" %s/LIB_runs_beta.ini > %s/runfiles/LIB_ts_runs_beta.ini'%(ifos,"".join(ifos),lib_label,"%s_%s_%s"%("".join(ifos),actual_start,stride-overlap),rundir,bindir,chtypes_dic,chnames_dic,infodir,rundir))
-
+	if train_runmode == 'Signal':
+		os.system('sed -e "s|START|%s|g" -e "s|STOP|%s|g" -e "s|#mdc|mdc|g" -e "s|#MDC|MDC|g" %s/runfiles/LIB_ts_runs_beta.ini > %s/tmp.txt; mv %s/tmp.txt %s/runfiles/LIB_ts_runs_beta.ini'%(actual_start-int(0.5*overlap),actual_start-int(0.5*overlap)+stride,rundir,rundir,rundir,rundir))
+	
 	#Write JOB
 	dagfile.write('JOB %s %s/runfiles/lalinference_pipe_beta.sub\n'%(job,rundir))
 	#Write VARS
@@ -273,8 +283,11 @@ if LIB_flag:
 	if not os.path.exists("%s/GDB/"%rundir):
 		os.makedirs("%s/GDB/"%rundir)
 
-	#replace all necessary fields in LIB_reruns_beta.ini file
-	os.system('sed -e "s|IFOSCOMMA|%s|g" -e "s|IFOSTOGETHER|%s|g" -e "s|LIBLABEL|%s|g" -e "s|SEGNAME|%s|g" -e "s|RUNDIR|%s|g" -e "s|BINDIR|%s|g" -e "s|CHANNELTYPES|%s|g" -e "s|CHANNELNAMES|%s|g" -e "s|LAG|0lag|g" %s/LIB_reruns_beta.ini > %s/runfiles/LIB_0lag_reruns_beta.ini'%(ifos,"".join(ifos),lib_label,"%s_%s_%s"%("".join(ifos),actual_start,stride-overlap),rundir,bindir,chtypes_dic,chnames_dic,infodir,rundir))
+	#replace all necessary fields in LIB_reruns_beta.ini file if running follow-up
+	if LIB_followup_flag:
+		os.system('sed -e "s|IFOSCOMMA|%s|g" -e "s|IFOSTOGETHER|%s|g" -e "s|LIBLABEL|%s|g" -e "s|SEGNAME|%s|g" -e "s|RUNDIR|%s|g" -e "s|BINDIR|%s|g" -e "s|CHANNELTYPES|%s|g" -e "s|CHANNELNAMES|%s|g" -e "s|LAG|0lag|g" %s/LIB_reruns_beta.ini > %s/runfiles/LIB_0lag_reruns_beta.ini'%(ifos,"".join(ifos),lib_label,"%s_%s_%s"%("".join(ifos),actual_start,stride-overlap),rundir,bindir,chtypes_dic,chnames_dic,infodir,rundir))
+		if train_runmode == 'Signal':
+			os.system('sed -e "s|START|%s|g" -e "s|STOP|%s|g" -e "s|#mdc|mdc|g" -e "s|#MDC|MDC|g" %s/runfiles/LIB_0lag_reruns_beta.ini > %s/tmp.txt; mv %s/tmp.txt %s/runfiles/LIB_0lag_reruns_beta.ini'%(actual_start-int(0.5*overlap),actual_start-int(0.5*overlap)+stride,rundir,rundir,rundir,rundir))
 
 	#Copy Bayes2LIB sub file to rundir
 	os.system('sed "s|RUNDIR|%s|g" %s/Bayes2LIB_beta.sub > %s/runfiles/Bayes2LIB_beta.sub'%(rundir,infodir,rundir))
@@ -282,9 +295,11 @@ if LIB_flag:
 	#Write JOB
 	dagfile.write('JOB %s %s/runfiles/Bayes2LIB_beta.sub\n'%(job,rundir))
 	#Write VARS
-	B2L_args = "-I %s -r %s -i %s --lib-label=%s --start=%s --stride=%s --overlap=%s --lag=0lag --FAR-thresh=%s --background-dic=%s --background-livetime=%s --signal-kde-coords=%s --signal-kde-values=%s --noise-kde-coords=%s --noise-kde-values=%s"%(",".join(ifos),rundir,infodir,lib_label,actual_start,stride,overlap,FAR_thresh,back_dic_path,back_livetime,oLIB_signal_kde_coords,oLIB_signal_kde_values,oLIB_noise_kde_coords,oLIB_noise_kde_values)
+	B2L_args = "-I %s -r %s -i %s --lib-label=%s --start=%s --stride=%s --overlap=%s --lag=0lag --FAR-thresh=%s --background-dic=%s --background-livetime=%s --signal-kde-coords=%s --signal-kde-values=%s --noise-kde-coords=%s --noise-kde-values=%s --train-runmode=%s --LIB-window=0.1"%(",".join(ifos),rundir,infodir,lib_label,actual_start,stride,overlap,FAR_thresh,back_dic_path,back_livetime,oLIB_signal_kde_coords,oLIB_signal_kde_values,oLIB_noise_kde_coords,oLIB_noise_kde_values,train_runmode)
 	if gdb_flag:
 		B2L_args += " --gdb"
+	if LIB_followup_flag:
+		B2L_args += " --LIB-followup"
 	dagfile.write('VARS %s macroid="Bayes2LIB_0lag-%s" macroarguments="%s"\n'%(job,job,B2L_args))
 	#Write RETRY
 	dagfile.write('RETRY %s 0\n\n'%job)
@@ -309,13 +324,18 @@ if LIB_flag:
 	if not os.path.exists("%s/GDB/"%rundir):
 		os.makedirs("%s/GDB/"%rundir)
 
-	#replace all necessary fields in LIB_reruns_beta.ini file
-	os.system('sed -e "s|IFOSCOMMA|%s|g" -e "s|IFOSTOGETHER|%s|g" -e "s|LIBLABEL|%s|g" -e "s|SEGNAME|%s|g" -e "s|RUNDIR|%s|g" -e "s|BINDIR|%s|g" -e "s|CHANNELTYPES|%s|g" -e "s|CHANNELNAMES|%s|g" -e "s|LAG|ts|g" %s/LIB_reruns_beta.ini > %s/runfiles/LIB_ts_reruns_beta.ini'%(ifos,"".join(ifos),lib_label,"%s_%s_%s"%("".join(ifos),actual_start,stride-overlap),rundir,bindir,chtypes_dic,chnames_dic,infodir,rundir))
+	#replace all necessary fields in LIB_reruns_beta.ini file if running follow-up
+	if LIB_followup_flag:
+		os.system('sed -e "s|IFOSCOMMA|%s|g" -e "s|IFOSTOGETHER|%s|g" -e "s|LIBLABEL|%s|g" -e "s|SEGNAME|%s|g" -e "s|RUNDIR|%s|g" -e "s|BINDIR|%s|g" -e "s|CHANNELTYPES|%s|g" -e "s|CHANNELNAMES|%s|g" -e "s|LAG|ts|g" %s/LIB_reruns_beta.ini > %s/runfiles/LIB_ts_reruns_beta.ini'%(ifos,"".join(ifos),lib_label,"%s_%s_%s"%("".join(ifos),actual_start,stride-overlap),rundir,bindir,chtypes_dic,chnames_dic,infodir,rundir))
+		if train_runmode == 'Signal':
+			os.system('sed -e "s|START|%s|g" -e "s|STOP|%s|g" -e "s|#mdc|mdc|g" -e "s|#MDC|MDC|g" %s/runfiles/LIB_ts_reruns_beta.ini > %s/tmp.txt; mv %s/tmp.txt %s/runfiles/LIB_ts_reruns_beta.ini'%(actual_start-int(0.5*overlap),actual_start-int(0.5*overlap)+stride,rundir,rundir,rundir,rundir))
 
 	#Write JOB
 	dagfile.write('JOB %s %s/runfiles/Bayes2LIB_beta.sub\n'%(job,rundir))
 	#Write VARS
-	B2L_args = "-I %s -r %s -i %s --lib-label=%s --start=%s --stride=%s --overlap=%s --lag=ts --FAR-thresh=%s --background-dic=%s --background-livetime=%s --signal-kde-coords=%s --signal-kde-values=%s --noise-kde-coords=%s --noise-kde-values=%s"%(",".join(ifos),rundir,infodir,lib_label,actual_start,stride,overlap,FAR_thresh,back_dic_path,back_livetime,oLIB_signal_kde_coords,oLIB_signal_kde_values,oLIB_noise_kde_coords,oLIB_noise_kde_values)
+	B2L_args = "-I %s -r %s -i %s --lib-label=%s --start=%s --stride=%s --overlap=%s --lag=ts --FAR-thresh=%s --background-dic=%s --background-livetime=%s --signal-kde-coords=%s --signal-kde-values=%s --noise-kde-coords=%s --noise-kde-values=%s --train-runmode=%s --LIB-window=0.1"%(",".join(ifos),rundir,infodir,lib_label,actual_start,stride,overlap,FAR_thresh,back_dic_path,back_livetime,oLIB_signal_kde_coords,oLIB_signal_kde_values,oLIB_noise_kde_coords,oLIB_noise_kde_values,train_runmode)
+	if LIB_followup_flag:
+		B2L_args += " --LIB-followup"
 	dagfile.write('VARS %s macroid="Bayes2LIB_ts-%s" macroarguments="%s"\n'%(job,job,B2L_args))
 	#Write RETRY
 	dagfile.write('RETRY %s 0\n\n'%job)
@@ -326,39 +346,45 @@ if LIB_flag:
 	#Done with job
 	job += 1	
 
-	#################################################
-	### Write DAG to point to LIB_0lag_reruns dag ###
-	#################################################
+	##############################################
+	### Check if supposed to run LIB follow-up ###
+	##############################################
 
-	LIB_0lag_reruns_jobs = []
+	if LIB_followup_flag:
+		
+		#################################################
+		### Write DAG to point to LIB_0lag_reruns dag ###
+		#################################################
 
-	#Write SUBDAG EXTERNAL
-	dagfile.write('SUBDAG EXTERNAL %s %s/LIB_0lag_rr/LIB_runs.dag\n'%(job,rundir))
-	#Write RETRY
-	dagfile.write('RETRY %s 0\n\n'%job)
+		LIB_0lag_reruns_jobs = []
 
-	#Record LIB_runs job number
-	LIB_0lag_reruns_jobs += [job]
+		#Write SUBDAG EXTERNAL
+		dagfile.write('SUBDAG EXTERNAL %s %s/LIB_0lag_rr/LIB_runs.dag\n'%(job,rundir))
+		#Write RETRY
+		dagfile.write('RETRY %s 0\n\n'%job)
 
-	#Done with job
-	job += 1
-	
-	#################################################
-	### Write DAG to point to LIB_0lag_reruns dag ###
-	#################################################
+		#Record LIB_runs job number
+		LIB_0lag_reruns_jobs += [job]
 
-	LIB_ts_reruns_jobs = []
+		#Done with job
+		job += 1
+		
+		###############################################
+		### Write DAG to point to LIB_ts_reruns dag ###
+		###############################################
 
-	#Write SUBDAG EXTERNAL
-	dagfile.write('SUBDAG EXTERNAL %s %s/LIB_ts_rr/LIB_runs.dag\n'%(job,rundir))
-	#Write RETRY
-	dagfile.write('RETRY %s 0\n\n'%job)
+		LIB_ts_reruns_jobs = []
 
-	#Record LIB_runs job number
-	LIB_ts_reruns_jobs += [job]
+		#Write SUBDAG EXTERNAL
+		dagfile.write('SUBDAG EXTERNAL %s %s/LIB_ts_rr/LIB_runs.dag\n'%(job,rundir))
+		#Write RETRY
+		dagfile.write('RETRY %s 0\n\n'%job)
 
-	#Done with job
-	job += 1
+		#Record LIB_runs job number
+		LIB_ts_reruns_jobs += [job]
+
+		#Done with job
+		job += 1
 
 
 ####################################
@@ -402,15 +428,17 @@ if LIB_flag:
 		for child in Bayes2LIB_ts_jobs:
 			dagfile.write('PARENT %s CHILD %s\n'%(parent,child))
 			
-	#make each Bayes2LIB_0lag job a parent to each LIB_0lag_reruns job
-	for parent in Bayes2LIB_0lag_jobs:
-		for child in LIB_0lag_reruns_jobs:
-			dagfile.write('PARENT %s CHILD %s\n'%(parent,child))
-			
-	#make each Bayes2LIB_ts job a parent to each LIB_ts_reruns job
-	for parent in Bayes2LIB_ts_jobs:
-		for child in LIB_ts_reruns_jobs:
-			dagfile.write('PARENT %s CHILD %s\n'%(parent,child))
+	if LIB_followup_flag:
+	
+		#make each Bayes2LIB_0lag job a parent to each LIB_0lag_reruns job
+		for parent in Bayes2LIB_0lag_jobs:
+			for child in LIB_0lag_reruns_jobs:
+				dagfile.write('PARENT %s CHILD %s\n'%(parent,child))
+				
+		#make each Bayes2LIB_ts job a parent to each LIB_ts_reruns job
+		for parent in Bayes2LIB_ts_jobs:
+			for child in LIB_ts_reruns_jobs:
+				dagfile.write('PARENT %s CHILD %s\n'%(parent,child))
 
 #################
 ### Close DAG ###

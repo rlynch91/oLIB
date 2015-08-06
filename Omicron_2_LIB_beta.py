@@ -425,7 +425,7 @@ def cluster_LIB_trigs(LIB_trig_array, LIB_window):
 			snr_current = line[2]
 			
 			#Compare current time to window start time to see if current trig is in window
-			if abs(t_current - t_start) <= LIB_window:
+			if abs(t_current - t_start) <= 0.5*LIB_window:
 				#If in current window, save trigger in dic with snr as key
 				window_dic[snr_current] = line
 				#Note that clustering was done during this iteration
