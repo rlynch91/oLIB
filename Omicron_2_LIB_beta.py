@@ -3,6 +3,7 @@
 import numpy as np
 import os
 import LLRT_object_beta
+import time
 
 #############################################
 #Define Functions
@@ -467,6 +468,31 @@ def cluster_LIB_trigs(LIB_trig_array, LIB_window):
 	return out_array
 
 ###
+def crop_segs(seg_file, overlap, ifo, ppdir):
+	"""
+	Crop out the Omicron overlap from merged segments to get segments in which triggers can actually occur (note that these segments should be merged first!)
+	"""
+	#import segments
+	seg_start_stop = np.genfromtxt(seg_file).reshape((-1,2))
+	
+	#open output file
+	cropped_segs_file_nm = "%s/live_segs/segments_%s_cropped.seg"%(ppdir, ifo)
+	if not os.path.exists("%s/live_segs/"%ppdir):
+		os.makedirs("%s/live_segs/"%ppdir)
+	cropped_segs_file = open(cropped_segs_file_nm,'wt')
+	
+	#loop through segments, cropping off the Omicron overlap from the edges
+	for seg in seg_start_stop:
+		tmp_start = seg[0] + int(overlap/2.)
+		tmp_stop = seg[1] - int(overlap/2.)
+		#write cropped segment start and stop times if still valid after cropping
+		if tmp_start < tmp_stop:
+			cropped_segs_file.write("%10.10f %10.10f\n"%(tmp_start,tmp_stop))
+			
+	cropped_segs_file.close()
+	return cropped_segs_file_nm
+		
+###
 def effective_segs(seg_file, veto_file, ifo, ppdir):
 	"""
 	Remove vetoes from segment list for a given ifo, thus creating effective segments
@@ -476,6 +502,8 @@ def effective_segs(seg_file, veto_file, ifo, ppdir):
 
 	try:
 		veto_start_stop = np.genfromtxt(veto_file).reshape((-1,2))
+		if not veto_start_stop:
+			veto_start_stop = np.array([[float('inf'), float('inf')]])
 	except IOError:
 		veto_start_stop = np.array([[float('inf'), float('inf')]])
 
@@ -664,7 +692,7 @@ def intersect_segments(seg_file1, seg_file2, ifos, t_shift, ppdir):
 	return seg_intersect_nm
 
 ###
-def calculate_livetimes(seg_file1, seg_file2, t_shift_start, t_shift_stop, t_shift_num, ifos, ppdir):
+def calculate_livetimes(seg_file1, seg_file2, t_shift_start, t_shift_stop, t_shift_num, ifos, ppdir, infodir, train_runmode):
 	"""
 	Add up effective segments for 0-lag and for each timeslide to calculate effective livetimes
 	"""	
@@ -714,6 +742,38 @@ def calculate_livetimes(seg_file1, seg_file2, t_shift_start, t_shift_stop, t_shi
 	#Write summed livetimes to file
 	np.savetxt("%s/live_segs/livetime_0lag_%s%s.txt"%(ppdir,ifos[0],ifos[1]), np.array([zero_lag_lt]))
 	np.savetxt("%s/live_segs/livetime_timeslides_%s%s.txt"%(ppdir,ifos[0],ifos[1]), np.array([timeslide_lt]))
+	
+	#Add summed livetimes to running collection if not in a training mode
+	if (train_runmode == 'None'):
+		#Check to make sure another function isn't currently updating the livetimes
+		while os.path.isfile('%s/result_dics/livetimes.txt_lock'%infodir):
+			time.sleep(5)
+			
+		#Lock livetime files while updating them
+		if not os.path.exists('%s/result_dics/'%infodir):
+			os.makedirs('%s/result_dics/'%infodir)
+		os.system('> %s/result_dics/livetimes.txt_lock'%infodir)
+		
+		#Load foreground and background livetimes
+		if os.path.isfile('%s/result_dics/foreground_livetime.txt'%infodir):
+			foreground_livetime = np.genfromtxt('%s/result_dics/foreground_livetime.txt'%infodir)
+		else:
+			foreground_livetime = 0.	
+		if os.path.isfile('%s/result_dics/background_livetime.txt'%infodir):
+			background_livetime = np.genfromtxt('%s/result_dics/background_livetime.txt'%infodir)
+		else:
+			background_livetime = 0.
+		
+		#Add summed livetimes to running foreground and background totals
+		foreground_livetime += zero_lag_lt
+		background_livetime += timeslide_lt
+		
+		#Save new foreground and background livetimes
+		np.savetxt('%s/result_dics/foreground_livetime.txt'%infodir, np.array([foreground_livetime]))
+		np.savetxt('%s/result_dics/background_livetime.txt'%infodir, np.array([background_livetime]))
+		
+		#Remove livetime lock file now that the update is complete
+		os.system('rm %s/result_dics/livetimes.txt_lock'%infodir)
 
 ##############################################
 if __name__=='__main__':
@@ -725,6 +785,7 @@ if __name__=='__main__':
 
 	#general options
 	parser.add_option("-p", "--ppdir", default=None, type="string", help="Path to post-processing directory, where results will be written")
+	parser.add_option("-i","--infodir", default=None, type="string", help="Path to info directory (where sub files, etc. are stored)")
 	parser.add_option("-I","--ifolist", default=None, type="string", help="Comma separated list of ifos. E.g., H1,L1")
 	parser.add_option("-r", "--rawdir", default=None, type="string", help="Path to raw directory")
 	parser.add_option("-c", "--channel-names", default=None, type="string", help="Comma separated names of channel to analyze for each ifo")
@@ -736,18 +797,21 @@ if __name__=='__main__':
 	parser.add_option("","--t-shift-num", default=None, type="float", help="Number of time shifts to apply to IFO 2")
 	parser.add_option("","--segs", default=None, type="string", help="Comma separated list of paths to files containing segment start/stop times for each ifo")
 	parser.add_option("","--veto-files", default=None, type="string", help="Comma separated list of paths to veto data file for each ifo")
+	parser.add_option("","--overlap", default=None, type='int', help="Overlap of segments used for Omicron")
 	parser.add_option("","--log-like-thresh", default=None, type="float", help="Threshold log likelihood ratio value")
 	parser.add_option("","--LIB-window", default=None, type="float", help="Length of window (in s) for LIB runs, cluster trigs to 1 trig per LIB window")
 	parser.add_option("","--signal-kde-coords", default=None, type='string', help='Path to file containing coodinates of the KDE likelihood estimate for signals')
 	parser.add_option("","--signal-kde-values", default=None, type='string', help='Path to file containing values of the KDE likelihood estimate for signals')
 	parser.add_option("","--noise-kde-coords", default=None, type='string', help='Path to file containing coodinates of the KDE likelihood estimate for noise')
 	parser.add_option("","--noise-kde-values", default=None, type='string', help='Path to file containing values of the KDE likelihood estimate for noise')
+	parser.add_option("","--train-runmode", default=None, type='string', help='Either "Signal", "Noise", or "None" depending on if user wants to run in training mode or not')
 
 	#----------------------------------------------
 
 	opts, args = parser.parse_args()
 
 	ppdir = opts.ppdir
+	infodir=opts.infodir
 	ifos = opts.ifolist.split(',')
 	rawdir = opts.rawdir
 	channel_names = opts.channel_names.split(',')
@@ -759,12 +823,14 @@ if __name__=='__main__':
 	t_shift_num = opts.t_shift_num
 	segs = opts.segs.split(",")
 	veto_files = opts.veto_files.split(',')
+	overlap = opts.overlap
 	log_like_thresh = opts.log_like_thresh
 	LIB_window = opts.LIB_window
 	signal_kde_coords = opts.signal_kde_coords
 	signal_kde_values = opts.signal_kde_values
 	noise_kde_coords = opts.noise_kde_coords
 	noise_kde_values = opts.noise_kde_values
+	train_runmode = opts.train_runmode
 	
 	#--------------------------------------------------------------
 	
@@ -788,15 +854,16 @@ if __name__=='__main__':
 		clust_files[ifo] = cluster_trigs(ts_file=ts_files[ifo], t_clust=t_clust, ifo=ifo, ppdir=ppdir)
 		print "Clustered trigs for %s"%ifo
 
-	#effective segments
+	#cropped and effective segments
 	if not os.path.exists("%s/live_segs/"%ppdir):
 		os.makedirs("%s/live_segs/"%ppdir)
 	os.system('rm %s/live_segs/*'%ppdir)
 	seg_files = {}
 	for i,ifo in enumerate(ifos):
-		seg_files[ifo] = effective_segs(seg_file=segs[i], veto_file=veto_files[i], ifo=ifo, ppdir=ppdir)
-		merge_segs(seg_file=seg_files[ifo])
-		print "Removed vetoes to create effective segments for %s"%ifo
+		merge_segs(seg_file=segs[i])
+		seg_files[ifo] = crop_segs(seg_file=segs[i], overlap=overlap, ifo=ifo, ppdir=ppdir)
+		seg_files[ifo] = effective_segs(seg_file=seg_files[ifo], veto_file=veto_files[i], ifo=ifo, ppdir=ppdir)
+		print "Cropped Omicron overlaps and removed vetoes to create effective segments for %s"%ifo
 	
 	#apply vetoes by constraining triggers to effective segments
 	for ifo in ifos:	
@@ -804,7 +871,7 @@ if __name__=='__main__':
 		print "Applied vetoes by constraining triggers to effective segments for %s"%ifo
 
 	#Live time intersection
-	calculate_livetimes(seg_file1=seg_files[ifos[0]], seg_file2=seg_files[ifos[1]], t_shift_start=t_shift_start, t_shift_stop=t_shift_stop, t_shift_num=t_shift_num, ifos=ifos, ppdir=ppdir)
+	calculate_livetimes(seg_file1=seg_files[ifos[0]], seg_file2=seg_files[ifos[1]], t_shift_start=t_shift_start, t_shift_stop=t_shift_stop, t_shift_num=t_shift_num, ifos=ifos, ppdir=ppdir, infodir=infodir, train_runmode=train_runmode)
 	print "Calculated total coincident live time for 0-lag and timeslides"
 
 	#coincidence
@@ -821,5 +888,3 @@ if __name__=='__main__':
 	log_likelihood_ratio_test(signal_kde_coords=signal_kde_coords, signal_kde_values=signal_kde_values, noise_kde_coords=noise_kde_coords, noise_kde_values=noise_kde_values, log_like_thresh=log_like_thresh, LIB_window=LIB_window, ifos=ifos, ppdir=ppdir)		
 	print "Down-selected trigs using log likelihood ratio test"
 	print "Complete"
-
-

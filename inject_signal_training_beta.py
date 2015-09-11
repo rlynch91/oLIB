@@ -3,10 +3,16 @@
 import numpy as np
 import os
 import commands
+import re
 
 #=======================================================================
+from optparse import OptionParser
+
+usage = None
+parser = OptionParser(usage=usage)
 
 parser.add_option("-I","--IFOs", default=None, type="string", help="Comma separated list of ifos. E.g., H1,L1")
+parser.add_option("-b","--bindir", default=None, type="string", help="Path to bin directory for LIB executables")
 parser.add_option("","--start", default=None, type='int', help="Start time of frame")
 parser.add_option("","--stop", default=None, type='int', help="Stop time of frame")
 parser.add_option("","--overlap", default=None, type='int', help="Overlap of segments")
@@ -19,22 +25,26 @@ parser.add_option("","--cache-files", default=None, type="string", help="Comma s
 
 opts, args = parser.parse_args()
 
-ifos = opts.IFOs
+ifos = opts.IFOs.split(",")
+bindir = opts.bindir
 start = opts.start
 stop = opts.stop
 overlap = opts.overlap
 segdir = opts.segdir
 min_hrss = opts.min_hrss
 max_hrss = opts.max_hrss
-cache_files_list = opts.cache_files
+cache_files_list = opts.cache_files.split(",")
 cache_files = {}
 for i,ifo in enumerate(ifos):
 	cache_files[ifo] = cache_files_list[i]
 
 #=======================================================================
+#Make necessary folders
+os.makedirs("%s/training_injections/raw"%segdir)
+os.makedirs("%s/training_injections/merged"%segdir)
 
 #Initialize mdc parameters
-ifos = repr(",".join(ifos))  #"H1,L1"
+ifos_str = repr(",".join(ifos))  #"H1,L1"
 num_mdc = 1  #number of mdc injection frames generated
 mdc_start_time = start  #start time of mdc injection frame
 mdc_end_time = stop  #end time of mdc injection frame
@@ -46,10 +56,10 @@ trig_start_time = mdc_start_time + padding + np.random.randint(low=0, high=(mdc_
 seed = trig_start_time
 
 mdc_par={
-"ifos":"["+ifos+"]",
+"ifos":"["+ifos_str+"]",
 "duration":mdc_duration,
-"pad":padding
-"gps-start":mdc_start_time
+"pad":padding,
+"gps-start":mdc_start_time,
 }
 
 #Initialize injection parameters
@@ -81,7 +91,7 @@ if inj_type == "SG":
 	"time-step":10000.,
 	"output": "%s/training_injections/raw/SG_seed_%s_hrss_%s_%s_time_%s_%s.xml"%(segdir,seed,min_hrss,max_hrss,mdc_start_time,mdc_end_time)
 	}
-elif inj_type == "WNB"
+elif inj_type == "WNB":
 	par={
 	"population":"all_sky_btlwnb", # time domain white noise burst
 	'min-duration':0.005,
@@ -92,10 +102,14 @@ elif inj_type == "WNB"
 	"f-distr":"uniform",
 	"min-f":40,
 	"max-f":1500,
-	"min-e-over-r2":1e-10, #won't be used anyway. Hrss will decide the amplitude
-	"max-e-over-r2":1e-10, #won't be used anyway. Hrss will decide the amplitude
 	"min-bandwidth":10,
 	"max-bandwidth":500,
+	"polar-angle-distr":"uniform",
+	"min-polar-angle":0.0,
+	"max-polar-angle":2.0*np.pi,
+	"polar-eccentricity-distr":"uniform",
+	"min-polar-eccentricity":0.0,
+	"max-polar-eccentricity":1.0,
 	"seed":seed,
 	"gps-start-time":trig_start_time,
 	"gps-end-time":trig_end_time,
@@ -107,22 +121,22 @@ else:
 
 #Create timeslide file
 os.chdir('%s/training_injections/raw/'%segdir)
-os.system("ligolw_tisi --instrument H1=0:0:0 --instrument L1=0:0:0 --instrument H2=0:0:0 --instrument V1=0:0:0 %s/training_injections/raw/time_slides.xml.gz"%segdir) # if this file doesn't exist, the main function will complain
+os.system("%s/ligolw_tisi --instrument H1=0:0:0 --instrument L1=0:0:0 --instrument H2=0:0:0 --instrument V1=0:0:0 %s/training_injections/raw/time_slides.xml.gz"%(bindir,segdir)) # if this file doesn't exist, the main function will complain
 
-#Run lalapps_binj to create injection xml file
-binj_string="lalapps_binj --time-slide-file %s/training_injections/raw/time_slides.xml.gz"%segdir
+#Run lalapps_libbinj to create injection xml file
+libbinj_string="%s/lalapps_libbinj --time-slide-file %s/training_injections/raw/time_slides.xml.gz"%(bindir,segdir)
 
 for key in par:
 	if type(par[key])==str:
-		binj_string += " --" + key + " " + par[key]
+		libbinj_string += " --" + key + " " + par[key]
 	else:
-		binj_string += " --" + key + " " + repr(par[key])
+		libbinj_string += " --" + key + " " + repr(par[key])
 
 os.chdir('%s/training_injections/raw/'%segdir)
-os.system(binj_string)
+os.system(libbinj_string)
 
 #Run lalapps_simburst_to_frame to create injection frames
-frame_string="lalapps_simburst_to_frame --simburst-file %s --channels [Science,Science]" % par["output"]
+frame_string="%s/lalapps_simburst_to_frame --simburst-file %s --channels [Science,Science]"%(bindir,par["output"]) #, "["+",".join(["%s:Science"%ifo for ifo in ifos])+"]")
 
 for key in mdc_par:
   if type(mdc_par[key])==str:
@@ -134,11 +148,11 @@ os.chdir('%s/training_injections/raw/'%segdir)
 os.system(frame_string)
 
 #Make cache file for the injection frames
-os.system('ls %s/training_injections/raw/*.gwf | lalapps_path2cache >> %s/framecache/MDC_Injections_%s_%s.lcf'%(segdir,segdir,mdc_start_time,mdc_stop_time))
+os.system('ls %s/training_injections/raw/*.gwf | lalapps_path2cache >> %s/framecache/MDC_Injections_%s_%s.lcf'%(segdir,segdir,mdc_start_time,mdc_end_time))
 
 #Combine data frames and injection frame, putting it in a cache file
-for IFO in ifos.split(','):
-	cache = open('%s/framecache/MDC_DatInjMerge_%s_%s_%s.lcf'%(segdir,IFO,mdc_start_time,mdc_stop_time),'wt')
+for IFO in ifos:
+	cache = open('%s/framecache/MDC_DatInjMerge_%s_%s_%s.lcf'%(segdir,IFO,mdc_start_time,mdc_end_time),'wt')
 
 	#Get paths of data frames
 	dat_files = []
@@ -151,7 +165,7 @@ for IFO in ifos.split(','):
 	dat_files = " ".join(dat_files).strip()
 
 	#Get paths of injection frames
-	inj_files = commands.getstatusoutput("ls %s/training_injections/raw/*%s*.gwf"%(segdir,IFO))[1]
+	inj_files = commands.getstatusoutput("ls %s/training_injections/raw/*.gwf"%segdir)[1]
 	inj_files = re.split('\n', inj_files)
 	inj_files = " ".join(inj_files).strip()
 

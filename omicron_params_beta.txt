@@ -7,18 +7,14 @@
 //*************************************************************************************
 
 //** full path to CACHE file pointing to frame files
-DATA    LCF	FRAMECACHE
+DATA    FFL	FRAMECACHE
 
 //** list of channels you want to process
 DATA    CHANNELS        IFO:CHNAME
 
-//**INJECTION	CHANNELS	IFO:Science
+//INJECTION	CHANNELS	IFO:Science
 
-//**INJECTION	FACTORS         1.0
-
-
-//** native sampling frequency (Hz) of working channels (as many as the number of input channels)
-DATA    NATIVEFREQUENCY 16384
+//INJECTION	FACTORS         1.0
 
 //** working sampling (one value for all channels)
 DATA    SAMPLEFREQUENCY 4096
@@ -31,7 +27,7 @@ DATA    SAMPLEFREQUENCY 4096
 PARAMETER       CHUNKDURATION   STRIDE
 
 //** segment duration in seconds (must be an integer)
-PARAMETER       BLOCKDURATION   4
+PARAMETER       SEGMENTDURATION   4
 
 //** overlap duration between segments in seconds (must be an integer)
 PARAMETER       OVERLAPDURATION   OLAP 
@@ -47,18 +43,8 @@ PARAMETER       QRANGE          3.3166  141
 //** for auxiliary channels,  0.4 is a good value (faster)
 PARAMETER       MISMATCHMAX     0.2
 
-//*************************************************************************************
-//************************            TRIGGERS           *****************************
-//*************************************************************************************
-
 //** tile SNR threshold
-TRIGGER         SNRTHRESHOLD    5.5
-
-//** maximum number of triggers per file
-TRIGGER         NMAX            1000000
-
-//** clustering on
-//TRIGGER         CLUSTERING      TIME
+PARAMETER         SNRTHRESHOLD    5.5
 
 //*************************************************************************************
 //************************             OUTPUT            *****************************
@@ -67,18 +53,16 @@ TRIGGER         NMAX            1000000
 //** full path to output directory
 OUTPUT  DIRECTORY	RAWDIR
 
+//** list of data products
+OUTPUT     PRODUCTS        triggers
+
 //** full path to output directory
 OUTPUT  FORMAT                  txt
+
+//** maximum number of triggers per file
+OUTPUT         NTRIGGERMAX            100000000
 
 //** verbosity level (0-1-2-3)
 OUTPUT  VERBOSITY               0
 
-//** flag to save PSDs
-OUTPUT  WRITEPSD                0
-
-//** flag to save data time series
-OUTPUT  WRITETIMESERIES         0
-
-//** flag to save whitened data time series
-OUTPUT  WRITEWHITENEDDATA       0
 

@@ -33,7 +33,7 @@ parser.add_option("","--dt-noise-kde-coords", default=None, type='string', help=
 parser.add_option("","--dt-noise-kde-values", default=None, type='string', help='Path to file containing values of the KDE likelihood estimate of dt for noise')
 parser.add_option("","--FAR-thresh", default=None, type='float', help="FAR treshold, below which events will be followed up with LIB")
 parser.add_option("","--background-dic", default=None, type='string', help='Path to dictionary containing search statistics of background events')
-parser.add_option("","--background-livetime", default=None, type='float', help='Livetime (in s) of background events')
+parser.add_option("","--background-livetime", default=None, type='string', help='Path to file containing the livetime (in s) of background events')
 parser.add_option("","--oLIB-signal-kde-coords", default=None, type='string', help='Path to file containing coodinates of the KDE likelihood estimate of oLIB for signals')
 parser.add_option("","--oLIB-signal-kde-values", default=None, type='string', help='Path to file containing values of the KDE likelihood estimate of oLIB for signals')
 parser.add_option("","--oLIB-noise-kde-coords", default=None, type='string', help='Path to file containing coodinates of the KDE likelihood estimate of oLIB for noise')
@@ -124,7 +124,7 @@ for i,ifo in enumerate(ifos):
 	#replace all necessary variables in params file
 	os.system('sed -e "s|IFO|%s|g" -e "s|FRAMECACHE|%s|g" -e "s|CHNAME|%s|g" -e "s|OLAP|%s|g" -e "s|STRIDE|%s|g" -e "s|RAWDIR|%s|g" %s/omicron_params_beta.txt > %s/runfiles/omicron_params_%s_beta.txt'%(ifo, cache_files[i], channel_names[i], overlap, stride, rundir+'/raw/'+ifo, infodir, rundir, ifo))
 	if train_runmode == 'Signal':
-		os.system('sed -e "s|//**INJECTION|INJECTION|g" %s/runfiles/omicron_params_%s_beta.txt > %s/tmp.txt; mv %s/tmp.txt %s/runfiles/omicron_params_%s_beta.txt'%(rundir,ifo,rundir,rundir,rundir,ifo))
+		os.system('sed -e "s|//INJECTION|INJECTION|g" %s/runfiles/omicron_params_%s_beta.txt > %s/tmp.txt; mv %s/tmp.txt %s/runfiles/omicron_params_%s_beta.txt'%(rundir,ifo,rundir,rundir,rundir,ifo))
 
 	#write JOB
 	dagfile.write('JOB %s %s/runfiles/omicron_%s_beta.sub\n'%(job,rundir,ifo))
@@ -160,7 +160,7 @@ os.system('touch %s/vetoes/null_vetoes.txt'%rundir)
 #Write JOB
 dagfile.write('JOB %s %s/runfiles/omicron2LIB_beta.sub\n'%(job,rundir))
 #Write VARS
-dagfile.write('VARS %s macroid="omicron2LIB-%s" macroarguments="-p %s/PostProc -I %s -r %s/raw -c %s --cluster-t=0.1 --coin-t=0.05 --coin-snr=0. --t-shift-start=%s --t-shift-stop=%s --t-shift-num=%s --segs=%s --veto-files=%s/vetoes/null_vetoes.txt,%s/vetoes/null_vetoes.txt --log-like-thresh=0. --LIB-window=0.1 --signal-kde-coords=%s --signal-kde-values=%s --noise-kde-coords=%s --noise-kde-values=%s"\n'%(job,job,rundir,opts.IFOs,rundir,",".join(channel_names),t_shift_start,t_shift_stop,t_shift_num,opts.seg_files,rundir,rundir,dt_signal_kde_coords,dt_signal_kde_values,dt_noise_kde_coords,dt_noise_kde_values))
+dagfile.write('VARS %s macroid="omicron2LIB-%s" macroarguments="-p %s/PostProc -i %s -I %s -r %s/raw -c %s --cluster-t=0.1 --coin-t=0.05 --coin-snr=0. --t-shift-start=%s --t-shift-stop=%s --t-shift-num=%s --segs=%s --veto-files=%s/vetoes/null_vetoes.txt,%s/vetoes/null_vetoes.txt --overlap=%s --log-like-thresh=0. --LIB-window=0.1 --signal-kde-coords=%s --signal-kde-values=%s --noise-kde-coords=%s --noise-kde-values=%s --train-runmode=%s"\n'%(job,job,rundir,infodir,opts.IFOs,rundir,",".join(channel_names),t_shift_start,t_shift_stop,t_shift_num,opts.seg_files,rundir,rundir,overlap,dt_signal_kde_coords,dt_signal_kde_values,dt_noise_kde_coords,dt_noise_kde_values,train_runmode))
 #Write RETRY
 dagfile.write('RETRY %s 0\n\n'%job)
 
@@ -295,7 +295,7 @@ if LIB_flag:
 	#Write JOB
 	dagfile.write('JOB %s %s/runfiles/Bayes2LIB_beta.sub\n'%(job,rundir))
 	#Write VARS
-	B2L_args = "-I %s -r %s -i %s --lib-label=%s --start=%s --stride=%s --overlap=%s --lag=0lag --FAR-thresh=%s --background-dic=%s --background-livetime=%s --signal-kde-coords=%s --signal-kde-values=%s --noise-kde-coords=%s --noise-kde-values=%s --train-runmode=%s --LIB-window=0.1"%(",".join(ifos),rundir,infodir,lib_label,actual_start,stride,overlap,FAR_thresh,back_dic_path,back_livetime,oLIB_signal_kde_coords,oLIB_signal_kde_values,oLIB_noise_kde_coords,oLIB_noise_kde_values,train_runmode)
+	B2L_args = "-I %s -r %s -i %s -b %s --lib-label=%s --start=%s --stride=%s --overlap=%s --lag=0lag --FAR-thresh=%s --background-dic=%s --background-livetime=%s --signal-kde-coords=%s --signal-kde-values=%s --noise-kde-coords=%s --noise-kde-values=%s --train-runmode=%s --LIB-window=0.1"%(",".join(ifos),rundir,infodir,bindir,lib_label,actual_start,stride,overlap,FAR_thresh,back_dic_path,back_livetime,oLIB_signal_kde_coords,oLIB_signal_kde_values,oLIB_noise_kde_coords,oLIB_noise_kde_values,train_runmode)
 	if gdb_flag:
 		B2L_args += " --gdb"
 	if LIB_followup_flag:
@@ -333,7 +333,7 @@ if LIB_flag:
 	#Write JOB
 	dagfile.write('JOB %s %s/runfiles/Bayes2LIB_beta.sub\n'%(job,rundir))
 	#Write VARS
-	B2L_args = "-I %s -r %s -i %s --lib-label=%s --start=%s --stride=%s --overlap=%s --lag=ts --FAR-thresh=%s --background-dic=%s --background-livetime=%s --signal-kde-coords=%s --signal-kde-values=%s --noise-kde-coords=%s --noise-kde-values=%s --train-runmode=%s --LIB-window=0.1"%(",".join(ifos),rundir,infodir,lib_label,actual_start,stride,overlap,FAR_thresh,back_dic_path,back_livetime,oLIB_signal_kde_coords,oLIB_signal_kde_values,oLIB_noise_kde_coords,oLIB_noise_kde_values,train_runmode)
+	B2L_args = "-I %s -r %s -i %s -b %s --lib-label=%s --start=%s --stride=%s --overlap=%s --lag=ts --FAR-thresh=%s --background-dic=%s --background-livetime=%s --signal-kde-coords=%s --signal-kde-values=%s --noise-kde-coords=%s --noise-kde-values=%s --train-runmode=%s --LIB-window=0.1"%(",".join(ifos),rundir,infodir,bindir,lib_label,actual_start,stride,overlap,FAR_thresh,back_dic_path,back_livetime,oLIB_signal_kde_coords,oLIB_signal_kde_values,oLIB_noise_kde_coords,oLIB_noise_kde_values,train_runmode)
 	if LIB_followup_flag:
 		B2L_args += " --LIB-followup"
 	dagfile.write('VARS %s macroid="Bayes2LIB_ts-%s" macroarguments="%s"\n'%(job,job,B2L_args))
@@ -444,5 +444,4 @@ if LIB_flag:
 ### Close DAG ###
 #################
 dagfile.close()
-
 

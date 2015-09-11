@@ -40,6 +40,8 @@ while os.path.isfile('%s/new_signal_training_points.pkl_lock'%dic_dir) or os.pat
 	time.sleep(5)
 	
 #Lock training dictionaries while updating them
+if not os.path.exists(dic_dir):
+	os.makedirs(dic_dir)
 os.system('> %s/new_signal_training_points.pkl_lock'%dic_dir)
 os.system('> %s/new_noise_training_points.pkl_lock'%dic_dir)
 
@@ -60,7 +62,7 @@ updated_noise_dic = {}
 ###SIGNAL###
 #If more than max new training points, need to downselect to the proper amount
 if len(new_signal_dic) >= max_signal_size:
-	downselect_keys = numpy.random.choice(new_signal_dic.keys(), size=max_signal_size, replace=False)
+	downselect_keys = np.random.choice(new_signal_dic.keys(), size=max_signal_size, replace=False)
 	for i,key in enumerate(downselect_keys):
 		updated_signal_dic[i] = new_signal_dic[key]
 
@@ -77,7 +79,7 @@ else:
 ###NOISE###
 #If more than max new training points, need to downselect to the proper amount
 if len(new_noise_dic) >= max_noise_size:
-	downselect_keys = numpy.random.choice(new_noise_dic.keys(), size=max_noise_size, replace=False)
+	downselect_keys = np.random.choice(new_noise_dic.keys(), size=max_noise_size, replace=False)
 	for i,key in enumerate(downselect_keys):
 		updated_noise_dic[i] = new_noise_dic[key] 
 
@@ -122,10 +124,12 @@ if LRT_param_group == 'BSN_and_BCI_and_oSNR':
 	param_info['BSN_and_BCI_and_oSNR']['interp range'] = np.array([[-20.,150.],[-25., 25.],[6., 20.]])
 	
 	optimize_signal_training = {}
+	optimize_signal_training['BSN_and_BCI_and_oSNR'] = {}
 	optimize_signal_training['BSN_and_BCI_and_oSNR']['optimization grid dimensions'] = np.array([10.,10.,10.])
 	optimize_signal_training['BSN_and_BCI_and_oSNR']['optimization grid ranges'] = np.array([[1.0,100.],[0.1,10.],[0.01,1.0]])
 	
 	optimize_noise_training = {}
+	optimize_noise_training['BSN_and_BCI_and_oSNR'] = {}
 	optimize_noise_training['BSN_and_BCI_and_oSNR']['optimization grid dimensions'] = np.array([10.,10.,10.])
 	optimize_noise_training['BSN_and_BCI_and_oSNR']['optimization grid ranges'] = np.array([[0.1,10.],[0.1,10.],[0.01,1.0]])
 
@@ -137,10 +141,12 @@ elif LRT_param_group == 'BSN_and_BCI':
 	param_info['BSN_and_BCI']['interp range'] = np.array([[-20., 150.],[-25., 25.]])
 	
 	optimize_signal_training = {}
+	optimize_signal_training['BSN_and_BCI'] = {}
 	optimize_signal_training['BSN_and_BCI']['optimization grid dimensions'] = np.array([50.,50.])
 	optimize_signal_training['BSN_and_BCI']['optimization grid ranges'] = np.array([[1.0,100.],[0.1,10.]])
 	
 	optimize_noise_training = {}
+	optimize_noise_training['BSN_and_BCI'] = {}
 	optimize_noise_training['BSN_and_BCI']['optimization grid dimensions'] = np.array([50.,50.])
 	optimize_noise_training['BSN_and_BCI']['optimization grid ranges'] = np.array([[0.1,10.],[0.1,10.]])
 

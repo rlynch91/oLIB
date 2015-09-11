@@ -36,7 +36,7 @@ parser.add_option("","--dt-noise-kde-coords", default=None, type='string', help=
 parser.add_option("","--dt-noise-kde-values", default=None, type='string', help='Path to file containing values of the KDE likelihood estimate of dt for noise')
 parser.add_option("","--FAR-thresh", default=None, type='float', help="FAR treshold, below which events will be followed up with LIB")
 parser.add_option("","--background-dic", default=None, type='string', help='Path to dictionary containing search statistics of background events')
-parser.add_option("","--background-livetime", default=None, type='float', help='Livetime (in s) of background events')
+parser.add_option("","--background-livetime", default=None, type='string', help='Path to file containing the livetime (in s) of background events')
 parser.add_option("","--oLIB-signal-kde-coords", default=None, type='string', help='Path to file containing coodinates of the KDE likelihood estimate of oLIB for signals')
 parser.add_option("","--oLIB-signal-kde-values", default=None, type='string', help='Path to file containing values of the KDE likelihood estimate of oLIB for signals')
 parser.add_option("","--oLIB-noise-kde-coords", default=None, type='string', help='Path to file containing coodinates of the KDE likelihood estimate of oLIB for noise')
@@ -91,7 +91,7 @@ max_hrss = opts.max_hrss
 
 #initialize start time (if no start time is given, default is current gps time) and stop times for first segment
 if not actual_start:
-	actual_start = int(commands.getstatusoutput('lalapps_tconvert now')[1])
+	actual_start = int(commands.getstatusoutput('%s/lalapps_tconvert now'%bindir)[1])
 
 np.savetxt(rundir+'/current_start.txt', np.array([actual_start]))
 
@@ -144,7 +144,7 @@ while True:
 		#if we haven't reached stop time yet, fetch frames again
 		if not check_after_stop:
 			print "haven't reached stop time, fetching frames for", ifo, start, stop
-			frame_files[ifo] = commands.getstatusoutput("gw_data_find --server=datafind.ldas.cit:80 --observatory=%s --url-type=file --type=%s --gps-start-time=%s --gps-end-time=%s"%(ifo.strip("1"), channel_types[i_ifo], start, stop))[1].split("\n")
+			frame_files[ifo] = commands.getstatusoutput("%s/gw_data_find --server=datafind.ldas.cit:80 --observatory=%s --url-type=file --type=%s --gps-start-time=%s --gps-end-time=%s"%(bindir, ifo.strip("1"), channel_types[i_ifo], start, stop))[1].split("\n")
 			if frame_files[ifo] == [""]:
 				print "no frames found for ifo", ifo, start, stop
 				frame_times[ifo] = [np.nan]
@@ -185,12 +185,13 @@ while True:
 			#check to see if all ifos have been flagged as ready for condor submission
 			if np.prod([success_flags[ifo_test] for ifo_test in ifos]):
 				#if in signal training mode, inject signals and point to new cache files
-				if not os.path.exists("%s/training_injections"%segdir):
-					os.makedirs("%s/training_injections"%segdir)
-				os.system("%s/inject_signal_training_beta.py"%(infodir))
-				for ifo in ifos:
-					cache_files[ifo] = "%s/framecache/MDC_DatInjMerge_%s_%s_%s.lcf"%(segdir,ifo,start,stop)
-				print "Injected event for signal training"
+				if train_runmode == "Signal":
+					if not os.path.exists("%s/training_injections"%segdir):
+						os.makedirs("%s/training_injections"%segdir)
+					os.system("%s/inject_signal_training_beta.py -I %s -b %s --start=%s --stop=%s --overlap=%s --segdir=%s --min-hrss=%s --max-hrss=%s --cache-files=%s"%(infodir,",".join(ifos),bindir,start,stop,overlap,segdir,min_hrss,max_hrss,",".join([cache_files[key] for key in cache_files])))
+					for ifo in ifos:
+						cache_files[ifo] = "%s/framecache/MDC_DatInjMerge_%s_%s_%s.lcf"%(segdir,ifo,start,stop)
+					print "Injected event for signal training"
 					
 				#write pipeline dag and runfolders
 				write_args = "-I %s -r %s -i %s -b %s -l %s -s %s -c %s --start=%s --stride=%s --overlap=%s --channel-names=%s --channel-types=%s --t-shift-start=%s --t-shift-stop=%s --t-shift-num=%s --dt-signal-kde-coords=%s --dt-signal-kde-values=%s --dt-noise-kde-coords=%s --dt-noise-kde-values=%s --FAR-thresh=%s --background-dic=%s --background-livetime=%s --oLIB-signal-kde-coords=%s --oLIB-signal-kde-values=%s --oLIB-noise-kde-coords=%s --oLIB-noise-kde-values=%s --train-runmode=%s"%(",".join(ifos), segdir, infodir, bindir, lib_label, ",".join([seg_files[ifo_tmp] for ifo_tmp in ifos]), ",".join([cache_files[ifo_tmp] for ifo_tmp in ifos]), actual_start, stride, overlap, ",".join(channel_names), ",".join(channel_types), t_shift_start, t_shift_stop, t_shift_num, dt_signal_kde_coords, dt_signal_kde_values, dt_noise_kde_coords, dt_noise_kde_values, FAR_thresh, back_dic_path, back_livetime, oLIB_signal_kde_coords, oLIB_signal_kde_values, oLIB_noise_kde_coords, oLIB_noise_kde_values, train_runmode)
@@ -250,7 +251,7 @@ while True:
 		#Check to see if we have exceeded the maximum wait
 		if running_wait > max_wait:
 			#catch up to real time
-			actual_start = int(commands.getstatusoutput('lalapps_tconvert now')[1])
+			actual_start = int(commands.getstatusoutput('%s/lalapps_tconvert now'%bindir)[1])
 			np.savetxt(rundir+'/current_start.txt', np.array([actual_start]))
 			start = actual_start - int(0.5*overlap)
 			stop = start + stride

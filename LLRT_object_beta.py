@@ -1,3 +1,5 @@
+import sys
+sys.path.insert(1,'/home/ryan.lynch/numpy/numpy-1.8.2-INSTALL/lib64/python2.6/site-packages')
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -6,7 +8,6 @@ from mpl_toolkits.mplot3d import Axes3D
 import time
 import os
 import re
-import sys
 from sys import exit
 import pickle
 import matplotlib.lines as mlines
