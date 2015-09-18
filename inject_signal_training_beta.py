@@ -71,11 +71,11 @@ if inj_type == "SG":
 	par={
 	"population":"all_sky_sinegaussian", # time domain SG
 	"q-distr":"uniform",
-	"min-q":3,
-	"max-q":30,
+	"min-q":2,
+	"max-q":110,
 	"f-distr":"uniform",
-	"min-f":40,
-	"max-f":1500,
+	"min-f":32,
+	"max-f":2048,
 	"hrss-distr":"volume",
 	'min-hrss':min_hrss, # approximate lower limit of detectability
 	'max-hrss':max_hrss,
@@ -100,8 +100,8 @@ elif inj_type == "WNB":
 	'min-hrss':min_hrss, #approximate lower limit of detectability
 	'max-hrss':max_hrss,
 	"f-distr":"uniform",
-	"min-f":40,
-	"max-f":1500,
+	"min-f":32,
+	"max-f":2048,
 	"min-bandwidth":10,
 	"max-bandwidth":500,
 	"polar-angle-distr":"uniform",

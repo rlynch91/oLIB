@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+import sys
+sys.path.insert(1,'/home/ryan.lynch/numpy/numpy-1.8.2-INSTALL/lib64/python2.6/site-packages')
 import numpy as np
 import pickle
 import LLRT_object_beta
@@ -131,7 +133,7 @@ if LRT_param_group == 'BSN_and_BCI_and_oSNR':
 	optimize_noise_training = {}
 	optimize_noise_training['BSN_and_BCI_and_oSNR'] = {}
 	optimize_noise_training['BSN_and_BCI_and_oSNR']['optimization grid dimensions'] = np.array([10.,10.,10.])
-	optimize_noise_training['BSN_and_BCI_and_oSNR']['optimization grid ranges'] = np.array([[0.1,10.],[0.1,10.],[0.01,1.0]])
+	optimize_noise_training['BSN_and_BCI_and_oSNR']['optimization grid ranges'] = np.array([[1.0,100.],[0.1,10.],[0.01,1.0]])
 
 elif LRT_param_group == 'BSN_and_BCI':
 	param_info = {}
@@ -148,7 +150,7 @@ elif LRT_param_group == 'BSN_and_BCI':
 	optimize_noise_training = {}
 	optimize_noise_training['BSN_and_BCI'] = {}
 	optimize_noise_training['BSN_and_BCI']['optimization grid dimensions'] = np.array([50.,50.])
-	optimize_noise_training['BSN_and_BCI']['optimization grid ranges'] = np.array([[0.1,10.],[0.1,10.]])
+	optimize_noise_training['BSN_and_BCI']['optimization grid ranges'] = np.array([[1.0,100.],[0.1,10.]])
 
 #Collect all signal training coordinates from dictionaries and put in arrays
 sig_BSN = np.ones(len(updated_signal_dic))*np.nan

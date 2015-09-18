@@ -44,8 +44,8 @@ parser.add_option("","--oLIB-noise-kde-values", default=None, type='string', hel
 parser.add_option("","--bitmask", default=None, type='int', help='Number corresponding to the bitmask to use for data quality when building segments')
 parser.add_option("","--inj-runmode", default=None, type='string', help='Either "Inj" or "NonInj" depending on if user wants to run on injections or not')
 parser.add_option("","--train-runmode", default=None, type='string', help='Either "Signal", "Noise", or "None" depending on if user wants to run in training mode or not')
-parser.add_option("","--min-hrss", default=None, type='float', help="Minimum hrss for injections when in signal training mode")
-parser.add_option("","--max-hrss", default=None, type='float', help="Maximum hrss for injections when in signal training mode")
+parser.add_option("","--min-hrss", default=None, type='float', help="Minimum hrss for analysis (injections and LIB)")
+parser.add_option("","--max-hrss", default=None, type='float', help="Maximum hrss for analysis (injections and LIB)")
 
 #---------------------------------------------
 
@@ -194,7 +194,7 @@ while True:
 					print "Injected event for signal training"
 					
 				#write pipeline dag and runfolders
-				write_args = "-I %s -r %s -i %s -b %s -l %s -s %s -c %s --start=%s --stride=%s --overlap=%s --channel-names=%s --channel-types=%s --t-shift-start=%s --t-shift-stop=%s --t-shift-num=%s --dt-signal-kde-coords=%s --dt-signal-kde-values=%s --dt-noise-kde-coords=%s --dt-noise-kde-values=%s --FAR-thresh=%s --background-dic=%s --background-livetime=%s --oLIB-signal-kde-coords=%s --oLIB-signal-kde-values=%s --oLIB-noise-kde-coords=%s --oLIB-noise-kde-values=%s --train-runmode=%s"%(",".join(ifos), segdir, infodir, bindir, lib_label, ",".join([seg_files[ifo_tmp] for ifo_tmp in ifos]), ",".join([cache_files[ifo_tmp] for ifo_tmp in ifos]), actual_start, stride, overlap, ",".join(channel_names), ",".join(channel_types), t_shift_start, t_shift_stop, t_shift_num, dt_signal_kde_coords, dt_signal_kde_values, dt_noise_kde_coords, dt_noise_kde_values, FAR_thresh, back_dic_path, back_livetime, oLIB_signal_kde_coords, oLIB_signal_kde_values, oLIB_noise_kde_coords, oLIB_noise_kde_values, train_runmode)
+				write_args = "-I %s -r %s -i %s -b %s -l %s -s %s -c %s --start=%s --stride=%s --overlap=%s --channel-names=%s --channel-types=%s --t-shift-start=%s --t-shift-stop=%s --t-shift-num=%s --dt-signal-kde-coords=%s --dt-signal-kde-values=%s --dt-noise-kde-coords=%s --dt-noise-kde-values=%s --FAR-thresh=%s --background-dic=%s --background-livetime=%s --oLIB-signal-kde-coords=%s --oLIB-signal-kde-values=%s --oLIB-noise-kde-coords=%s --oLIB-noise-kde-values=%s --train-runmode=%s --min-hrss=%s --max-hrss=%s"%(",".join(ifos), segdir, infodir, bindir, lib_label, ",".join([seg_files[ifo_tmp] for ifo_tmp in ifos]), ",".join([cache_files[ifo_tmp] for ifo_tmp in ifos]), actual_start, stride, overlap, ",".join(channel_names), ",".join(channel_types), t_shift_start, t_shift_stop, t_shift_num, dt_signal_kde_coords, dt_signal_kde_values, dt_noise_kde_coords, dt_noise_kde_values, FAR_thresh, back_dic_path, back_livetime, oLIB_signal_kde_coords, oLIB_signal_kde_values, oLIB_noise_kde_coords, oLIB_noise_kde_values, train_runmode, min_hrss, max_hrss)
 				if gdb_flag:
 					write_args += " --gdb"
 				if LIB_flag:

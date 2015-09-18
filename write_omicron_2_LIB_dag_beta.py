@@ -39,6 +39,8 @@ parser.add_option("","--oLIB-signal-kde-values", default=None, type='string', he
 parser.add_option("","--oLIB-noise-kde-coords", default=None, type='string', help='Path to file containing coodinates of the KDE likelihood estimate of oLIB for noise')
 parser.add_option("","--oLIB-noise-kde-values", default=None, type='string', help='Path to file containing values of the KDE likelihood estimate of oLIB for noise')
 parser.add_option("","--train-runmode", default=None, type='string', help='Either "Signal", "Noise", or "None" depending on if user wants to run in training mode or not')
+parser.add_option("","--min-hrss", default=None, type='float', help="Minimum hrss for analysis (injections and LIB)")
+parser.add_option("","--max-hrss", default=None, type='float', help="Maximum hrss for analysis (injections and LIB)")
 
 #---------------------------------------------
 
@@ -74,6 +76,8 @@ oLIB_signal_kde_values = opts.oLIB_signal_kde_values
 oLIB_noise_kde_coords = opts.oLIB_noise_kde_coords
 oLIB_noise_kde_values = opts.oLIB_noise_kde_values
 train_runmode = opts.train_runmode
+min_hrss = opts.min_hrss
+max_hrss = opts.max_hrss
 
 #############################################
 
@@ -187,7 +191,7 @@ if LIB_flag:
 		os.makedirs("%s/LIB_0lag/"%rundir)
 
 	#replace all necessary fields in LIB_runs_beta.ini file
-	os.system('sed -e "s|IFOSCOMMA|%s|g" -e "s|IFOSTOGETHER|%s|g" -e "s|LIBLABEL|%s|g" -e "s|SEGNAME|%s|g" -e "s|RUNDIR|%s|g" -e "s|BINDIR|%s|g" -e "s|CHANNELTYPES|%s|g" -e "s|CHANNELNAMES|%s|g" -e "s|LAG|0lag|g" %s/LIB_runs_beta.ini > %s/runfiles/LIB_0lag_runs_beta.ini'%(ifos,"".join(ifos),lib_label,"%s_%s_%s"%("".join(ifos),actual_start,stride-overlap),rundir,bindir,chtypes_dic,chnames_dic,infodir,rundir))
+	os.system('sed -e "s|IFOSCOMMA|%s|g" -e "s|IFOSTOGETHER|%s|g" -e "s|LIBLABEL|%s|g" -e "s|SEGNAME|%s|g" -e "s|RUNDIR|%s|g" -e "s|BINDIR|%s|g" -e "s|CHANNELTYPES|%s|g" -e "s|CHANNELNAMES|%s|g" -e "s|LAG|0lag|g" -e "s|MINHRSS|%s|g" -e "s|MAXHRSS|%s|g" %s/LIB_runs_beta.ini > %s/runfiles/LIB_0lag_runs_beta.ini'%(ifos,"".join(ifos),lib_label,"%s_%s_%s"%("".join(ifos),actual_start,stride-overlap),rundir,bindir,chtypes_dic,chnames_dic,np.log(min_hrss),np.log(max_hrss),infodir,rundir))
 	if train_runmode == 'Signal':
 		os.system('sed -e "s|START|%s|g" -e "s|STOP|%s|g" -e "s|#mdc|mdc|g" -e "s|#MDC|MDC|g" %s/runfiles/LIB_0lag_runs_beta.ini > %s/tmp.txt; mv %s/tmp.txt %s/runfiles/LIB_0lag_runs_beta.ini'%(actual_start-int(0.5*overlap),actual_start-int(0.5*overlap)+stride,rundir,rundir,rundir,rundir))
 		
@@ -218,7 +222,7 @@ if LIB_flag:
 		os.makedirs("%s/LIB_ts/"%rundir)
 
 	#replace all necessary fields in LIB_runs_beta.ini file
-	os.system('sed -e "s|IFOSCOMMA|%s|g" -e "s|IFOSTOGETHER|%s|g" -e "s|LIBLABEL|%s|g" -e "s|SEGNAME|%s|g" -e "s|RUNDIR|%s|g" -e "s|BINDIR|%s|g" -e "s|CHANNELTYPES|%s|g" -e "s|CHANNELNAMES|%s|g" -e "s|LAG|ts|g" %s/LIB_runs_beta.ini > %s/runfiles/LIB_ts_runs_beta.ini'%(ifos,"".join(ifos),lib_label,"%s_%s_%s"%("".join(ifos),actual_start,stride-overlap),rundir,bindir,chtypes_dic,chnames_dic,infodir,rundir))
+	os.system('sed -e "s|IFOSCOMMA|%s|g" -e "s|IFOSTOGETHER|%s|g" -e "s|LIBLABEL|%s|g" -e "s|SEGNAME|%s|g" -e "s|RUNDIR|%s|g" -e "s|BINDIR|%s|g" -e "s|CHANNELTYPES|%s|g" -e "s|CHANNELNAMES|%s|g" -e "s|LAG|ts|g" -e "s|MINHRSS|%s|g" -e "s|MAXHRSS|%s|g" %s/LIB_runs_beta.ini > %s/runfiles/LIB_ts_runs_beta.ini'%(ifos,"".join(ifos),lib_label,"%s_%s_%s"%("".join(ifos),actual_start,stride-overlap),rundir,bindir,chtypes_dic,chnames_dic,np.log(min_hrss),np.log(max_hrss),infodir,rundir))
 	if train_runmode == 'Signal':
 		os.system('sed -e "s|START|%s|g" -e "s|STOP|%s|g" -e "s|#mdc|mdc|g" -e "s|#MDC|MDC|g" %s/runfiles/LIB_ts_runs_beta.ini > %s/tmp.txt; mv %s/tmp.txt %s/runfiles/LIB_ts_runs_beta.ini'%(actual_start-int(0.5*overlap),actual_start-int(0.5*overlap)+stride,rundir,rundir,rundir,rundir))
 	
@@ -285,7 +289,7 @@ if LIB_flag:
 
 	#replace all necessary fields in LIB_reruns_beta.ini file if running follow-up
 	if LIB_followup_flag:
-		os.system('sed -e "s|IFOSCOMMA|%s|g" -e "s|IFOSTOGETHER|%s|g" -e "s|LIBLABEL|%s|g" -e "s|SEGNAME|%s|g" -e "s|RUNDIR|%s|g" -e "s|BINDIR|%s|g" -e "s|CHANNELTYPES|%s|g" -e "s|CHANNELNAMES|%s|g" -e "s|LAG|0lag|g" %s/LIB_reruns_beta.ini > %s/runfiles/LIB_0lag_reruns_beta.ini'%(ifos,"".join(ifos),lib_label,"%s_%s_%s"%("".join(ifos),actual_start,stride-overlap),rundir,bindir,chtypes_dic,chnames_dic,infodir,rundir))
+		os.system('sed -e "s|IFOSCOMMA|%s|g" -e "s|IFOSTOGETHER|%s|g" -e "s|LIBLABEL|%s|g" -e "s|SEGNAME|%s|g" -e "s|RUNDIR|%s|g" -e "s|BINDIR|%s|g" -e "s|CHANNELTYPES|%s|g" -e "s|CHANNELNAMES|%s|g" -e "s|LAG|0lag|g" -e "s|MINHRSS|%s|g" -e "s|MAXHRSS|%s|g" %s/LIB_reruns_beta.ini > %s/runfiles/LIB_0lag_reruns_beta.ini'%(ifos,"".join(ifos),lib_label,"%s_%s_%s"%("".join(ifos),actual_start,stride-overlap),rundir,bindir,chtypes_dic,chnames_dic,np.log(min_hrss),np.log(max_hrss),infodir,rundir))
 		if train_runmode == 'Signal':
 			os.system('sed -e "s|START|%s|g" -e "s|STOP|%s|g" -e "s|#mdc|mdc|g" -e "s|#MDC|MDC|g" %s/runfiles/LIB_0lag_reruns_beta.ini > %s/tmp.txt; mv %s/tmp.txt %s/runfiles/LIB_0lag_reruns_beta.ini'%(actual_start-int(0.5*overlap),actual_start-int(0.5*overlap)+stride,rundir,rundir,rundir,rundir))
 
@@ -326,7 +330,7 @@ if LIB_flag:
 
 	#replace all necessary fields in LIB_reruns_beta.ini file if running follow-up
 	if LIB_followup_flag:
-		os.system('sed -e "s|IFOSCOMMA|%s|g" -e "s|IFOSTOGETHER|%s|g" -e "s|LIBLABEL|%s|g" -e "s|SEGNAME|%s|g" -e "s|RUNDIR|%s|g" -e "s|BINDIR|%s|g" -e "s|CHANNELTYPES|%s|g" -e "s|CHANNELNAMES|%s|g" -e "s|LAG|ts|g" %s/LIB_reruns_beta.ini > %s/runfiles/LIB_ts_reruns_beta.ini'%(ifos,"".join(ifos),lib_label,"%s_%s_%s"%("".join(ifos),actual_start,stride-overlap),rundir,bindir,chtypes_dic,chnames_dic,infodir,rundir))
+		os.system('sed -e "s|IFOSCOMMA|%s|g" -e "s|IFOSTOGETHER|%s|g" -e "s|LIBLABEL|%s|g" -e "s|SEGNAME|%s|g" -e "s|RUNDIR|%s|g" -e "s|BINDIR|%s|g" -e "s|CHANNELTYPES|%s|g" -e "s|CHANNELNAMES|%s|g" -e "s|LAG|ts|g" -e "s|MINHRSS|%s|g" -e "s|MAXHRSS|%s|g" %s/LIB_reruns_beta.ini > %s/runfiles/LIB_ts_reruns_beta.ini'%(ifos,"".join(ifos),lib_label,"%s_%s_%s"%("".join(ifos),actual_start,stride-overlap),rundir,bindir,chtypes_dic,chnames_dic,np.log(min_hrss),np.log(max_hrss),infodir,rundir))
 		if train_runmode == 'Signal':
 			os.system('sed -e "s|START|%s|g" -e "s|STOP|%s|g" -e "s|#mdc|mdc|g" -e "s|#MDC|MDC|g" %s/runfiles/LIB_ts_reruns_beta.ini > %s/tmp.txt; mv %s/tmp.txt %s/runfiles/LIB_ts_reruns_beta.ini'%(actual_start-int(0.5*overlap),actual_start-int(0.5*overlap)+stride,rundir,rundir,rundir,rundir))
 
