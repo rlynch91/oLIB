@@ -5,7 +5,6 @@ import os
 import pickle
 from ligo.gracedb.rest import GraceDb
 import json
-#from pylal import bayespputils as bppu
 import LLRT_object_beta
 import commands
 import time
@@ -104,13 +103,40 @@ for f in posterior_files:
 		dictionary[event]['BSN'] = bsn
 		post_file.close()
 		
-		#Find waveform params
-#		commonResultsObj=peparser.parse(open("%s/LIB_%s/posterior_samples/%s"%(rundir,lag,f.split('_B.txt')[0]),'rt'),info=[None,None])
-#		pos = bppu.BurstPosterior(commonResultsObj)
-#		statmax_pos,max_j=pos._posMap()
-#		for param in ['frequency','quality']:
-#			dictionary[event][param]=pos[param].samples[max_j][0]
+		#First gather all waveform parameter samples
+		with open("%s/LIB_%s/posterior_samples/%s"%(rundir,lag,f.split('_B.txt')[0]),'rt') as pos_samp_file:
+			pos_samps = list(pos_samp_file)
+		
+		freq_ind = np.nan
+		qual_ind = np.nan
+		hrss_ind = np.nan
+		
+		freq_samps = np.ones(len(pos_samps)-1)*np.nan
+		qual_samps = np.ones(len(pos_samps)-1)*np.nan
+		hrss_samps = np.ones(len(pos_samps)-1)*np.nan
+		
+		for iline,line in enumerate(pos_samps):
+			#loop over all samples
+			params = line.split()
+			if iline == 0:
+				#on header line, look for necessary indices
+				for ipar, par in enumerate(params):
+					if par == 'frequency':
+						freq_ind = ipar
+					elif par == 'quality':
+						qual_ind = ipar
+					elif par == 'loghrss':
+						hrss_ind = ipar
+			else:
+				#now on sample lines
+				freq_samps[iline-1] = float(params[freq_ind])
+				qual_samps[iline-1] = float(params[qual_ind])
+				hrss_samps[iline-1] = np.exp(float(params[hrss_ind]))
 			
+		#With samples, add necessary estimators to dictionaries
+		dictionary[event]['frequency'] = np.mean(freq_samps)
+		dictionary[event]['quality'] = np.mean(qual_samps)
+		dictionary[event]['hrss'] = np.mean(hrss_samps)
 
 #Find BCIs		
 coherence_files = os.listdir("%s/LIB_%s/coherence_test/"%(rundir,lag))
@@ -397,36 +423,59 @@ for event in dictionary:
 			gid = str(response["graceid"])
 			
 			#Update GraceDb log with post-proc pages
-#			gdb.writeLog(gid, message="Preliminary results: f_0 = %s, Q = %s"%(dictionary[event]['frequency'],dictionary[event]['quality']))
-			gdb.writeLog(gid, message="Preliminary results: BSN = %s, BCI = %s, oSNR = %s"%(dictionary[event]['BSN'],dictionary[event]['BCI'],dictionary[event]['Omicron SNR']))
+			gdb.writeLog(gid, message="oLIB preliminary estimates: frequency = %s, quality = %s, hrss = %s, logBCI = %s, logBSN= %s, oSNR = %s"%(dictionary[event]['frequency'],dictionary[event]['quality'],dictionary[event]['hrss'],dictionary[event]['BCI'],dictionary[event]['BSN'],dictionary[event]['Omicron SNR']), tagname='pe')
 			if LIB_followup_flag:
-				gdb.writeLog(gid, message="Follow-up results will be written: https://ldas-jobs.ligo.caltech.edu/~ryan.lynch/%s/%s/followup/%s/%s/%s/posplots.html"%(lib_label,lag,'%s_%s_%s'%("".join(ifos),actual_start,stride-overlap),'%s-%s'%(dictionary[event]['gpstime'],e_new),"".join(ifos)))
+				gdb.writeLog(gid, message="Follow-up results will be written: https://ldas-jobs.ligo.caltech.edu/~ryan.lynch/%s/%s/followup/%s/%s/%s/posplots.html"%(lib_label,lag,'%s_%s_%s'%("".join(ifos),actual_start,stride-overlap),'%s-%s'%(dictionary[event]['gpstime'],e_new),"".join(ifos)), tagname='pe')
 
 #store results of loop over events
 rr_trigtimes.close()
 rr_timeslides.close()
 
 if (train_runmode == 'None') and (lag == '0lag'):
-	#Save foreground dicitonary
-	pickle.dump(foreground_dic, open('%s/result_dics/foreground_events.pkl'%infodir,'wt'))
+	#Save foreground dictionary and test that it is not corrupt
+	pickle.dump(foreground_dic, open('%s/result_dics/foreground_events.pkl_tmp'%infodir,'wt'))
+	if pickle.load(open('%s/result_dics/foreground_events.pkl_tmp'%infodir)) == foreground_dic:
+		os.system('mv %s/result_dics/foreground_events.pkl_tmp %s/result_dics/foreground_events.pkl'%(infodir,infodir))
+	else:
+		os.system('rm %s/result_dics/foreground_events.pkl_tmp'%infodir)
+		os.system('rm %s/result_dics/foreground_events.pkl_lock'%infodir)
+		raise ValueError, "Something corrupt in foreground dictionary"
 	#Unlock foreground dictionary now that it's updated
 	os.system('rm %s/result_dics/foreground_events.pkl_lock'%infodir)
 	
 elif (train_runmode == 'None') and (lag == 'ts'):
-	#Save background dicitonary
-	pickle.dump(background_dic, open('%s/result_dics/background_events.pkl'%infodir,'wt'))
+	#Save background dictionary and test that it is not corrupt
+	pickle.dump(background_dic, open('%s/result_dics/background_events.pkl_tmp'%infodir,'wt'))
+	if pickle.load(open('%s/result_dics/background_events.pkl_tmp'%infodir)) == background_dic:
+		os.system('mv %s/result_dics/background_events.pkl_tmp %s/result_dics/background_events.pkl'%(infodir,infodir))
+	else:
+		os.system('rm %s/result_dics/background_events.pkl_tmp'%infodir)
+		os.system('rm %s/result_dics/background_events.pkl_lock'%infodir)
+		raise ValueError, "Something corrupt in background dictionary"
 	#Unlock background dictionary now that it's updated
 	os.system('rm %s/result_dics/background_events.pkl_lock'%infodir)
 
 elif (train_runmode == 'Noise') and (lag == 'ts'):
-	#Save noise training dicitonary
-	pickle.dump(noise_train_dic, open('%s/training_dics/new_noise_training_points.pkl'%infodir,'wt'))
+	#Save noise training dictionary and test that it is not corrupt
+	pickle.dump(noise_train_dic, open('%s/training_dics/new_noise_training_points.pkl_tmp'%infodir,'wt'))
+	if pickle.load(open('%s/training_dics/new_noise_training_points.pkl_tmp'%infodir)) == noise_train_dic:
+		os.system('mv %s/training_dics/new_noise_training_points.pkl_tmp %s/training_dics/new_noise_training_points.pkl'%(infodir,infodir))
+	else:
+		os.system('rm %s/training_dics/new_noise_training_points.pkl_tmp'%infodir)
+		os.system('rm %s/training_dics/new_noise_training_points.pkl_lock'%infodir)
+		raise ValueError, "Something corrupt in noise training dictionary"
 	#Unlock noise training dictionary now that it's updated
 	os.system('rm %s/training_dics/new_noise_training_points.pkl_lock'%infodir)
 	
 elif (train_runmode == 'Signal') and (lag == '0lag'):
-	#Save signal training dictionary
-	pickle.dump(sig_train_dic, open('%s/training_dics/new_signal_training_points.pkl'%infodir,'wt'))
+	#Save signal training dictionary and test that it is not corrupt
+	pickle.dump(sig_train_dic, open('%s/training_dics/new_signal_training_points.pkl_tmp'%infodir,'wt'))
+	if pickle.load(open('%s/training_dics/new_signal_training_points.pkl_tmp'%infodir)) == sig_train_dic:
+		os.system('mv %s/training_dics/new_signal_training_points.pkl_tmp %s/training_dics/new_signal_training_points.pkl'%(infodir,infodir))
+	else:
+		os.system('rm %s/training_dics/new_signal_training_points.pkl_tmp'%infodir)
+		os.system('rm %s/training_dics/new_signal_training_points.pkl_lock'%infodir)
+		raise ValueError, "Something corrupt in signal training dictionary"
 	#Unlock signal training dictionary now that it's updated
 	os.system('rm %s/training_dics/new_signal_training_points.pkl_lock'%infodir)
 

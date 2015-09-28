@@ -502,7 +502,7 @@ def effective_segs(seg_file, veto_file, ifo, ppdir):
 
 	try:
 		veto_start_stop = np.genfromtxt(veto_file).reshape((-1,2))
-		if not veto_start_stop:
+		if not veto_start_stop.any():
 			veto_start_stop = np.array([[float('inf'), float('inf')]])
 	except IOError:
 		veto_start_stop = np.array([[float('inf'), float('inf')]])
