@@ -194,7 +194,7 @@ param_info = {}
 param_info['BSN_and_BCI'] = {}
 param_info['BSN_and_BCI']['dimension'] = 2
 param_info['BSN_and_BCI']['param names'] = ['BSN','BCI']
-param_info['BSN_and_BCI']['interp range'] = np.array([[-20., 150.],[-25., 25.]])
+param_info['BSN_and_BCI']['interp range'] = np.array([[-30., 300.],[-35., 35.]])
 
 #Load likelihood estimate for signal
 train_signal_data = {}
@@ -234,7 +234,7 @@ back_coords = np.ones((len(back_dic),3))*np.nan
 
 for i, key in enumerate(back_dic):
 	try:
-		if back_dic[key]['BCI'] <= 20:
+		if back_dic[key]['BCI'] <= 20.:
 			back_coords[i,0] = back_dic[key]['BSN']
 			back_coords[i,1] = back_dic[key]['BCI']
 			back_coords[i,2] = back_dic[key]['Omicron SNR']
