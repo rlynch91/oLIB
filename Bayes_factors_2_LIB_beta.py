@@ -71,9 +71,6 @@ if gdb_flag:
 #Initialize dictionary
 dictionary = {}
 
-#Initialize peparser
-#peparser=bppu.PEOutputParser('common')
-
 #Find trigtimes and timeslides and add to dictionary		
 timeslide_array = np.genfromtxt('%s/PostProc/LIB_trigs/LIB_%s_timeslides_%s.txt'%(rundir,lag,"".join(ifos))).reshape(-1,len(ifos))
 trigtime_array = np.genfromtxt('%s/PostProc/LIB_trigs/LIB_%s_times_%s.txt'%(rundir,lag,"".join(ifos))).reshape(-1,1)
@@ -262,8 +259,9 @@ event_LLRs = LLRT.log_likelihood_ratios(groundtype='Foreground')
 for event, event_LLR in enumerate(event_LLRs):
 	dictionary[event]['FAR'] = LLRT.calculate_FAR_of_thresh(threshold=event_LLR, livetime=float_back_livetime, groundtype='Background')
 
-#Save dictionary
-pickle.dump(dictionary, open('%s/PostProc/LIB_trigs/LIB_%s_dic_%s.pkl'%(rundir, lag, "".join(ifos)),'wt'))
+#Save dictionary if not in signal training mode (save signal training dictionary later)
+if train_runmode != "Signal":
+	pickle.dump(dictionary, open('%s/PostProc/LIB_trigs/LIB_%s_dic_%s.pkl'%(rundir, lag, "".join(ifos)),'wt'))
 
 #---------------------------------------------------------------------------------------
 
@@ -365,7 +363,10 @@ elif (train_runmode == 'Signal') and (lag == '0lag'):
 		sig_train_key = np.max(sig_train_dic.keys()) + 1
 	
 	#find the time of the training injection
-	inj_time = float(commands.getstatusoutput('%s/ligolw_print %s/training_injections/raw/*.xml -c "time_geocent_gps" -r 0:1'%(bindir,rundir))[1])
+	inj_times = commands.getstatusoutput('%s/ligolw_print %s/training_injections/raw/*.xml -c "time_geocent_gps"'%(bindir,rundir))[1].split()
+	print "Inj times: ", inj_times
+	dictionary_found_inj = {}
+	found_inj_key = 0
 
 #loop over all events
 for event in dictionary:
@@ -387,19 +388,17 @@ for event in dictionary:
 		noise_train_dic[noise_train_key] = dictionary[event]
 		noise_train_key += 1
 	
-	#if pipeline is in signal training mode, check to see if signal is found in 0-lag, if so add to signal training dictionary if most significant event
+	#if pipeline is in signal training mode, check to see if signal is found in 0-lag, if so add to signal training dictionary
 	elif (train_runmode == 'Signal') and (lag == '0lag'):
 		#Only want to train signal on 0-lag events
-		if np.absolute(inj_time - float(dictionary[event]['gpstime'])) <= 0.5*LIB_window:
-			#LIB needs to have run over at least part of the injection for it to be considered found
-			if sig_train_dic.has_key(sig_train_key):
-				#Found event has already been entered into the training dictionary
-				if sig_train_dic[sig_train_key]['Omicron SNR'] < dictionary[event]['Omicron SNR']:
-					#Update the training dictionary with the found event with the loudest oSNR
-					sig_train_dic[sig_train_key] = dictionary[event]
-			else:
-				#No other events have entered the training dictionary, so enter this one
+		for inj_time in inj_times:
+			if np.absolute(float(inj_time) - float(dictionary[event]['gpstime'])) <= 0.5*LIB_window:
+				#LIB needs to have run over at least part of the injection for it to be considered foun
 				sig_train_dic[sig_train_key] = dictionary[event]
+				dictionary_found_inj[found_inj_key] = dictionary[event]
+				sig_train_key += 1
+				found_inj_key += 1
+				break
 	
 	#check Bayes factors against specified thresholds
 	if dictionary[event]['FAR'] <= FAR_thresh:			
@@ -423,7 +422,7 @@ for event in dictionary:
 			gid = str(response["graceid"])
 			
 			#Update GraceDb log with post-proc pages
-			gdb.writeLog(gid, message="oLIB preliminary estimates: frequency = %s, quality = %s, hrss = %s, logBCI = %s, logBSN= %s, oSNR = %s"%(dictionary[event]['frequency'],dictionary[event]['quality'],dictionary[event]['hrss'],dictionary[event]['BCI'],dictionary[event]['BSN'],dictionary[event]['Omicron SNR']), tagname='pe')
+			gdb.writeLog(gid, message="oLIB preliminary estimates: logBCI = %s, logBSN= %s, oSNR = %s"%(dictionary[event]['BCI'],dictionary[event]['BSN'],dictionary[event]['Omicron SNR']), tagname='pe')
 			if LIB_followup_flag:
 				gdb.writeLog(gid, message="Follow-up results will be written: https://ldas-jobs.ligo.caltech.edu/~ryan.lynch/%s/%s/followup/%s/%s/%s/posplots.html"%(lib_label,lag,'%s_%s_%s'%("".join(ifos),actual_start,stride-overlap),'%s-%s'%(dictionary[event]['gpstime'],e_new),"".join(ifos)), tagname='pe')
 
@@ -468,6 +467,9 @@ elif (train_runmode == 'Noise') and (lag == 'ts'):
 	os.system('rm %s/training_dics/new_noise_training_points.pkl_lock'%infodir)
 	
 elif (train_runmode == 'Signal') and (lag == '0lag'):
+	#Save collected signal training dictionary from these runs
+	pickle.dump(dictionary_found_inj, open('%s/PostProc/LIB_trigs/LIB_%s_dic_%s.pkl'%(rundir, lag, "".join(ifos)),'wt'))
+	
 	#Save signal training dictionary and test that it is not corrupt
 	pickle.dump(sig_train_dic, open('%s/training_dics/new_signal_training_points.pkl_tmp'%infodir,'wt'))
 	if pickle.load(open('%s/training_dics/new_signal_training_points.pkl_tmp'%infodir)) == sig_train_dic:

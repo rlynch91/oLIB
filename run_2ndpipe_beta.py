@@ -46,6 +46,7 @@ parser.add_option("","--inj-runmode", default=None, type='string', help='Either 
 parser.add_option("","--train-runmode", default=None, type='string', help='Either "Signal", "Noise", or "None" depending on if user wants to run in training mode or not')
 parser.add_option("","--min-hrss", default=None, type='float', help="Minimum hrss for analysis (injections and LIB)")
 parser.add_option("","--max-hrss", default=None, type='float', help="Maximum hrss for analysis (injections and LIB)")
+parser.add_option("","--asd-file", default=None, type="string", help="LIGO ASD file to use for estimating the SNR")
 
 #---------------------------------------------
 
@@ -86,6 +87,7 @@ inj_runmode = opts.inj_runmode
 train_runmode = opts.train_runmode
 min_hrss = opts.min_hrss
 max_hrss = opts.max_hrss
+asd_file = opts.asd_file
 
 #############################################
 
@@ -188,7 +190,7 @@ while True:
 				if train_runmode == "Signal":
 					if not os.path.exists("%s/training_injections"%segdir):
 						os.makedirs("%s/training_injections"%segdir)
-					os.system("%s/inject_signal_training_beta.py -I %s -b %s --start=%s --stop=%s --overlap=%s --segdir=%s --min-hrss=%s --max-hrss=%s --cache-files=%s"%(infodir,",".join(ifos),bindir,start,stop,overlap,segdir,min_hrss,max_hrss,",".join([cache_files[key] for key in cache_files])))
+					os.system("%s/inject_signal_training_beta.py -I %s -b %s --start=%s --stop=%s --overlap=%s --segdir=%s --min-hrss=%s --max-hrss=%s --cache-files=%s --asd-file=%s"%(infodir,",".join(ifos),bindir,start,stop,overlap,segdir,min_hrss,max_hrss,",".join([cache_files[key] for key in cache_files]),asd_file))
 					for ifo in ifos:
 						cache_files[ifo] = "%s/framecache/MDC_DatInjMerge_%s_%s_%s.lcf"%(segdir,ifo,start,stop)
 					print "Injected event for signal training"

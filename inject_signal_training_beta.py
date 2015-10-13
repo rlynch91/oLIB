@@ -20,6 +20,7 @@ parser.add_option("","--segdir", default=None, type="string", help="Path to dire
 parser.add_option("","--min-hrss", default=None, type='float', help="Minimum hrss for injections")
 parser.add_option("","--max-hrss", default=None, type='float', help="Maximum hrss for injections")
 parser.add_option("","--cache-files", default=None, type="string", help="Comma separated list of paths to data cache files corresponding to the ifos")
+parser.add_option("","--asd-file", default=None, type="string", help="LIGO ASD file to use for estimating the SNR")
 
 #---------------------------------------------
 
@@ -37,6 +38,7 @@ cache_files_list = opts.cache_files.split(",")
 cache_files = {}
 for i,ifo in enumerate(ifos):
 	cache_files[ifo] = cache_files_list[i]
+asd_file = opts.asd_file
 
 #=======================================================================
 #Make necessary folders
@@ -52,7 +54,7 @@ padding = int(overlap/2.)  # buffer between edges of frame and injections, value
 
 mdc_duration = mdc_end_time - mdc_start_time
 trig_end_time = mdc_end_time - padding
-trig_start_time = mdc_start_time + padding + np.random.randint(low=0, high=(mdc_duration-2*padding+1))
+trig_start_time = mdc_start_time + padding + np.random.randint(low=0, high=min((mdc_duration-2*padding+1),100))
 seed = trig_start_time
 
 mdc_par={
@@ -64,7 +66,7 @@ mdc_par={
 
 #Initialize injection parameters
 #Randomly select SG vs WNB
-types = ["SG","WNB"]
+types = ["SG"] #["SG","WNB"]
 inj_type = types[np.random.randint(low=0, high=len(types))]
 
 if inj_type == "SG":
@@ -74,8 +76,8 @@ if inj_type == "SG":
 	"min-q":2,
 	"max-q":110,
 	"f-distr":"uniform",
-	"min-f":32,
-	"max-f":2048,
+	"min-frequency":32,
+	"max-frequency":2048,
 	"hrss-distr":"volume",
 	'min-hrss':min_hrss, # approximate lower limit of detectability
 	'max-hrss':max_hrss,
@@ -88,34 +90,39 @@ if inj_type == "SG":
 	"seed":seed,
 	"gps-start-time":trig_start_time,
 	"gps-end-time":trig_end_time,
-	"time-step":10000.,
+	"time-step":100.,
+	"ligo-psd":asd_file,
+	"ligo-start-freq": 0.1,
+	"min-snr":3.0,
+	"max-snr":1000000.,
+	"ifos":"H1,L1",
 	"output": "%s/training_injections/raw/SG_seed_%s_hrss_%s_%s_time_%s_%s.xml"%(segdir,seed,min_hrss,max_hrss,mdc_start_time,mdc_end_time)
 	}
-elif inj_type == "WNB":
-	par={
-	"population":"all_sky_btlwnb", # time domain white noise burst
-	'min-duration':0.005,
-	'max-duration':0.1,
-	'hrss-distr':'volume',
-	'min-hrss':min_hrss, #approximate lower limit of detectability
-	'max-hrss':max_hrss,
-	"f-distr":"uniform",
-	"min-f":32,
-	"max-f":2048,
-	"min-bandwidth":10,
-	"max-bandwidth":500,
-	"polar-angle-distr":"uniform",
-	"min-polar-angle":0.0,
-	"max-polar-angle":2.0*np.pi,
-	"polar-eccentricity-distr":"uniform",
-	"min-polar-eccentricity":0.0,
-	"max-polar-eccentricity":1.0,
-	"seed":seed,
-	"gps-start-time":trig_start_time,
-	"gps-end-time":trig_end_time,
-	"time-step":10000.,
-	"output": "%s/training_injections/raw/WNB_seed_%s_hrss_%s_%s_time_%s_%s.xml"%(segdir,seed,min_hrss,max_hrss,mdc_start_time,mdc_end_time)
-	}
+#elif inj_type == "WNB":
+#	par={
+#	"population":"all_sky_btlwnb", # time domain white noise burst
+#	'min-duration':0.005,
+#	'max-duration':0.1,
+#	'hrss-distr':'volume',
+#	'min-hrss':min_hrss, #approximate lower limit of detectability
+#	'max-hrss':max_hrss,
+#	"f-distr":"uniform",
+#	"min-f":32,
+#	"max-f":2048,
+#	"min-bandwidth":10,
+#	"max-bandwidth":500,
+#	"polar-angle-distr":"uniform",
+#	"min-polar-angle":0.0,
+#	"max-polar-angle":2.0*np.pi,
+#	"polar-eccentricity-distr":"uniform",
+#	"min-polar-eccentricity":0.0,
+#	"max-polar-eccentricity":1.0,
+#	"seed":seed,
+#	"gps-start-time":trig_start_time,
+#	"gps-end-time":trig_end_time,
+#	"time-step":10000.,
+#	"output": "%s/training_injections/raw/WNB_seed_%s_hrss_%s_%s_time_%s_%s.xml"%(segdir,seed,min_hrss,max_hrss,mdc_start_time,mdc_end_time)
+#	}
 else:
 	raise ValueError, "No injection type selected"
 
