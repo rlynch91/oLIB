@@ -106,7 +106,7 @@ class LLRT(object):
 			
 			#If no KDE data passed, do KDE smoothing
 			if self.signal[key]['KDE'] == None:
-				self.signal[key]['KDE'] = self.KDE_smoothing(model='Signal', groupname=key)
+				self.signal[key]['KDE'] = self.log_KDE_smoothing(model='Signal', groupname=key)
 			
 		###NOISE###
 				
@@ -155,7 +155,7 @@ class LLRT(object):
 				
 			#If no KDE data passed, do KDE smoothing
 			if self.noise[key]['KDE'] == None:
-				self.noise[key]['KDE'] = self.KDE_smoothing(model='Noise', groupname=key)
+				self.noise[key]['KDE'] = self.log_KDE_smoothing(model='Noise', groupname=key)
 		
 		###FOREGROUND###
 				
@@ -252,8 +252,60 @@ class LLRT(object):
 			height_kde +=  np.exp( -0.5 * np.sum( ((data[i,:] - location_kde)/bandwidths)**2., axis=-1) ) / (np.product(bandwidths) * (2.*np.pi)**(n_params/2.))	
 
 		height_kde /= float(len(data))
+		log_height_kde = np.log10(height_kde)
 		
-		return location_kde, height_kde
+		return location_kde, log_height_kde
+	
+	###
+	def log_KDE_smoothing(self, model, groupname):
+		"""
+		Perform log10 KDE smoothing in specificied number of dimensions (ndim = n_params)
+		"""
+		#Load in necessary info for either data or noise depending on the passed model
+		if model == 'Signal':
+			dic = self.signal
+		elif model == 'Noise':
+			dic = self.noise
+		else:
+			#Raise error here
+			pass
+		
+		n_params = dic[groupname]['dimension']
+		KDE_ranges = dic[groupname]['KDE ranges']
+		bandwidths = dic[groupname]['KDE bandwidths']
+		data = dic[groupname]['data']
+		grid_points = dic[groupname]['KDE points']
+		
+		#Initialize grid over which to do KDE binning
+		grid_values = [None]*n_params
+		for i in xrange(n_params):
+			grid_values[i] = np.linspace(start=KDE_ranges[i,0], stop=KDE_ranges[i,1], num=grid_points[i])
+		
+		if n_params == 1:
+			location_kde = np.transpose(np.array(grid_values))
+		else:
+			location_kde = np.array(np.meshgrid(*grid_values,indexing='ij'))
+			location_kde = np.rollaxis(location_kde, 0, (n_params + 1))
+		
+		grid_shape = ()
+		for i in xrange(n_params):
+			grid_shape += (grid_points[i],)
+		log_height_kde = np.zeros(grid_shape)
+		
+		#Calculate height contribution of each data point over the grid
+		log_height_kde += -np.log10(np.product(bandwidths) * (2.*np.pi)**(n_params/2.) * float(len(data)))
+		for i in xrange(len(data)):
+			if i == 0:
+				A =  -0.5 * np.log10(np.e) * np.sum( ((data[i,:] - location_kde)/bandwidths)**2., axis=-1)
+				log_height_kde += A
+			else:
+				B = -A - 0.5 * np.log10(np.e) * np.sum( ((data[i,:] - location_kde)/bandwidths)**2., axis=-1)
+				C = B
+				C[B <= 300.] = np.log10( 1. + 10.**(B[B <= 300.]) )
+				A += C
+				log_height_kde += C
+		
+		return location_kde, log_height_kde
 	
 	###
 	def interpolate(self, known_coords, known_values, interp_coords, groupname):
@@ -392,8 +444,8 @@ class LLRT(object):
 		extrap_array_noise = ~interp_array_noise
 		
 		#Initialize arrays to store likelihood values
-		likelihood_signal = np.zeros(len(data))
-		likelihood_noise = np.zeros(len(data))
+		log_likelihood_signal = np.zeros(len(data))
+		log_likelihood_noise = np.zeros(len(data))
 		
 		#Get necessary coordinates and values
 		coords_sig = self.signal[groupname]['KDE'][0]
@@ -402,14 +454,14 @@ class LLRT(object):
 		values_noise = self.noise[groupname]['KDE'][1]		
 				
 		#Calculate interpolated likelihoods
-		likelihood_signal[interp_array_sig] = self.interpolate(known_coords=coords_sig, known_values=values_sig, interp_coords=data[interp_array_sig], groupname=groupname)
-		likelihood_noise[interp_array_noise] = self.interpolate(known_coords=coords_noise, known_values=values_noise, interp_coords=data[interp_array_noise], groupname=groupname)
+		log_likelihood_signal[interp_array_sig] = self.interpolate(known_coords=coords_sig, known_values=values_sig, interp_coords=data[interp_array_sig], groupname=groupname)
+		log_likelihood_noise[interp_array_noise] = self.interpolate(known_coords=coords_noise, known_values=values_noise, interp_coords=data[interp_array_noise], groupname=groupname)
 		
 		#Calculate extrapolated likelihoods
-		likelihood_signal[extrap_array_sig] = self.extrapolate(known_coords=coords_sig, known_values=values_sig, extrap_coords=data[extrap_array_sig], groupname=groupname)
-		likelihood_noise[extrap_array_noise] = self.extrapolate(known_coords=coords_noise, known_values=values_noise, extrap_coords=data[extrap_array_noise], groupname=groupname)
+		log_likelihood_signal[extrap_array_sig] = self.extrapolate(known_coords=coords_sig, known_values=values_sig, extrap_coords=data[extrap_array_sig], groupname=groupname)
+		log_likelihood_noise[extrap_array_noise] = self.extrapolate(known_coords=coords_noise, known_values=values_noise, extrap_coords=data[extrap_array_noise], groupname=groupname)
 		
-		return np.log10(likelihood_signal) - np.log10(likelihood_noise)
+		return log_likelihood_signal - log_likelihood_noise
 		
 	###
 	def calculate_totalLLR(self, groundtype):
@@ -508,8 +560,8 @@ class LLRT(object):
 			pass
 		
 		#Save binary files cotaining both KDE coordinates and KDE values
-		np.save('%s/%s_%s_KDE_coords.npy'%(outdir,groupname,model), dic[groupname]['KDE'][0])
-		np.save('%s/%s_%s_KDE_values.npy'%(outdir,groupname,model), dic[groupname]['KDE'][1])
+		np.save('%s/%s_%s_log_KDE_coords.npy'%(outdir,groupname,model), dic[groupname]['KDE'][0])
+		np.save('%s/%s_%s_log_KDE_values.npy'%(outdir,groupname,model), dic[groupname]['KDE'][1])
 		
 	###	
 	def save_all_KDE(self, outdir):
@@ -549,7 +601,7 @@ class LLRT(object):
 			self.save_group_bandwidths(model='Noise', groupname=group, outdir=outdir)
 	
 	###		
-	def plot_group_likelihoods(self, groupname, outdir):
+	def plot_group_log_likelihoods(self, groupname, outdir):
 		"""
 		Make a plot of the likelihoods for signal and noise for a given parameter group over the KDE interpolation range
 		"""
@@ -572,10 +624,10 @@ class LLRT(object):
 			plt.plot(signal_coords, signal_values, 'b-', label='Signal')
 			plt.plot(noise_coords, noise_values, 'r-', label='Noise')
 			plt.xlabel(signal_params[0])
-			plt.ylabel('Probability Density')
+			plt.ylabel('Log10 Probability Density')
 			plt.grid(True,which="both")
 			plt.legend(loc='best')
-			myfig.savefig('%s/%s_likelihoods'%(outdir,groupname), bbox_inches='tight')
+			myfig.savefig('%s/%s_log_likelihoods'%(outdir,groupname), bbox_inches='tight')
 		
 		#If the parameter group is 2-D, make plot
 		elif ndim == 2:
@@ -595,8 +647,8 @@ class LLRT(object):
 			ax.plot_wireframe(x_noise,y_noise,z_noise,color='r',label='Noise', rstride=1, cstride=1, alpha=0.5)
 			ax.set_xlabel(signal_params[0])
 			ax.set_ylabel(signal_params[1])
-			ax.set_zlabel('Probability Density')
-			myfig.savefig('%s/%s_likelihoods_3D'%(outdir,groupname), bbox_inches='tight')
+			ax.set_zlabel('Log 10 Probability Density')
+			myfig.savefig('%s/%s_log_likelihoods_3D'%(outdir,groupname), bbox_inches='tight')
 			
 			#Make contour plot
 			myfig=plt.figure()
@@ -607,7 +659,7 @@ class LLRT(object):
 			sig_line = mlines.Line2D([],[],linestyle='solid',color='k')
 			noise_line = mlines.Line2D([],[],linestyle='dashed',color='k')
 			plt.legend([sig_line,noise_line],['Signal','Noise'])
-			myfig.savefig('%s/%s_likelihoods_contour'%(outdir,groupname), bbox_inches='tight')
+			myfig.savefig('%s/%s_log_likelihoods_contour'%(outdir,groupname), bbox_inches='tight')
 			
 		#If the parameter group is >= 3-D, cannot make plot for now
 		else:
@@ -615,13 +667,13 @@ class LLRT(object):
 			pass
 	
 	###	
-	def plot_all_likelihoods(self, outdir):
+	def plot_all_log_likelihoods(self, outdir):
 		"""
 		Make a plot of the likelihoods for signal and noise over the KDE interpolation range for all parameter groups
 		"""
 		#Iterate over all parameter groups
 		for group in self.group_names:
-			self.plot_group_likelihoods(groupname=group, outdir=outdir)
+			self.plot_group_log_likelihoods(groupname=group, outdir=outdir)
 	
 	###		
 	def plot_group_LLR(self, groupname, outdir):
@@ -648,7 +700,7 @@ class LLRT(object):
 		else:
 			LLR_params = signal_params
 			LLR_coords = signal_coords
-			LLR_values = np.log10(signal_values) - np.log10(noise_values)
+			LLR_values = signal_values - noise_values
 		
 			#If the parameter group is 1-D, make plot
 			if ndim == 1:

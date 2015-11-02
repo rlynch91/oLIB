@@ -1,0 +1,11 @@
+universe     = vanilla
+accounting_group = ligo.prod.o1.burst.allsky.omicron_lib
+executable   = ???/all_possible_timeslides.py
+arguments    = $(macroarguments)
+getenv	     = True
+log          = /usr1/ryan.lynch/logs/log.all_possible_timeslides
+output       = ???/log//$(macroid).out
+error        = ???/log/$(macroid).err
+notification = never
+queue 1
+
