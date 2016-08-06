@@ -138,7 +138,7 @@ def cluster_trigs(ts_file, t_clust, ifo, ppdir):
 	
 	clust_file.close()
 	
-	os.system("sort %s -o %s"%(clust_file_nm, clust_file_nm))
+	os.system("sort %s -n -o %s"%(clust_file_nm, clust_file_nm))
 	
 	return clust_file_nm
 		
@@ -202,7 +202,7 @@ def constrain_2_eff_segs(trig_file, seg_file, t_clust, ifo, ppdir):
 	survive_file.close()
 	
 	#Sorting by start time undoes sorting by central time, so sort by central time
-	os.system("sort %s -o %s"%(survive_file_nm, survive_file_nm))
+	os.system("sort %s -n -o %s"%(survive_file_nm, survive_file_nm))
 	
 	return survive_file_nm
 
@@ -253,8 +253,8 @@ def coincidence(trig_file_1, trig_file_2, t_coin, snr_coin, ifos, t_shift, ppdir
 		Q_compare = float(compare_line[3])
 		
 		while abs(t_current - t_compare) <= t_coin:
-			if (f_current == f_compare) and (Q_current == Q_compare) and (np.sqrt(snr_current**2. + snr_compare**2.) >= snr_coin):
-				coin_file.write( "%10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f\n"%((t_current+t_compare)/2., (f_current+f_compare)/2., np.sqrt( snr_current**2. + snr_compare**2. ), (Q_current+Q_compare)/2., t_current, f_current, snr_current, Q_current, t_compare, f_compare, snr_compare, Q_compare) )
+			if (f_current == f_compare) and (Q_current == Q_compare) and (np.sqrt(np.power(snr_current,2.) + np.power(snr_compare,2.)) >= snr_coin):
+				coin_file.write( "%10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f\n"%((t_current+t_compare)/2., (f_current+f_compare)/2., np.sqrt( np.power(snr_current,2.) + np.power(snr_compare,2.) ), (Q_current+Q_compare)/2., t_current, f_current, snr_current, Q_current, t_compare, f_compare, snr_compare, Q_compare) )
 
 			if (i2_compare + 1) >= len(lines_2):
 				break
@@ -269,7 +269,7 @@ def coincidence(trig_file_1, trig_file_2, t_coin, snr_coin, ifos, t_shift, ppdir
 	coin_file.close()
 	read_trig_file_1.close()
 	
-	os.system("sort %s -o %s"%(coin_file_nm, coin_file_nm))
+	os.system("sort %s -n -o %s"%(coin_file_nm, coin_file_nm))
 				
 	return coin_file_nm
 	
@@ -367,7 +367,7 @@ def log_likelihood_ratio_test(signal_kde_coords, signal_kde_values, noise_kde_co
 		foreground_data['delta_t'] = {}
 		foreground_data['delta_t']['data'] = np.transpose(np.array([dt_tmp]))
 				
-		if foreground_data['delta_t']['data'].any():
+		if len(foreground_data['delta_t']['data']):
 			#Initialize the LLRT object
 			LLRT = LLRT_object_beta.LLRT(calc_info=calc_info, param_info=param_info, train_signal_data=train_signal_data, train_noise_data=train_noise_data, foreground_data=foreground_data)
 		

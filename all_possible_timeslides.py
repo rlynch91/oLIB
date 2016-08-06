@@ -14,25 +14,21 @@ def collect_trigs(rawdir, ifo, channel_name, ppdir):
 	Collect omicron trigs from rawdir and compile them into a single, time-sorted list
 	"""
 	#Find all omicron raw output files
-	os.chdir("%s/%s/%s:%s/"%(rawdir,ifo,ifo,channel_name))
-	os.system("rm tmp.txt")
 	files_all = os.listdir("%s/%s/%s:%s"%(rawdir,ifo,ifo,channel_name))
 	
+	#Make necessary folders
+	if not os.path.exists("%s/unclustered/"%ppdir):
+		os.makedirs("%s/unclustered/"%ppdir)
+	os.system("> %s/unclustered/triggers_unclustered_%s.txt"%(ppdir,ifo))
+	
 	#Collect trigger info from all raw output files
-	os.system("> tmp.txt")
 	for i, f in enumerate(files_all):
 		if f.split('.')[1] == 'txt':
-			os.system("sed '/#/d' %s >> tmp.txt"%f)
+			os.system("sed '/#/d' %s/%s/%s:%s/%s >> %s/unclustered/triggers_unclustered_%s.txt"%(rawdir,ifo,ifo,channel_name,f,ppdir,ifo))
 			print "Collected file %s of %s for %s"%(i+1, len(files_all), ifo)
 	 
 	#Sort the compiled file
-	os.system("sort -n tmp.txt > triggers_unclustered_%s.txt"%ifo)
-	
-	#Move the file to the unclustered post-processing folder
-	if not os.path.exists("%s/unclustered/"%ppdir):
-		os.makedirs("%s/unclustered/"%ppdir)
-	os.system("mv triggers_unclustered_%s.txt %s/unclustered/"%(ifo, ppdir))
-	os.system("rm tmp.txt")
+	os.system("sort %s/unclustered/triggers_unclustered_%s.txt -n -o %s/unclustered/triggers_unclustered_%s.txt"%(ppdir,ifo,ppdir,ifo))
 	
 	return "%s/unclustered/triggers_unclustered_%s.txt"%(ppdir, ifo)
 
@@ -138,7 +134,7 @@ def cluster_trigs(ts_file, t_clust, ifo, ppdir):
 	
 	clust_file.close()
 	
-	os.system("sort %s -o %s"%(clust_file_nm, clust_file_nm))
+	os.system("sort %s -n -o %s"%(clust_file_nm, clust_file_nm))
 	
 	return clust_file_nm
 		
@@ -147,18 +143,10 @@ def constrain_2_eff_segs(trig_file, seg_file, t_clust, ifo, ppdir):
 	"""
 	Constrain list of time-sorted triggers to lie within the passed time-sorted effective segments (i.e., apply vetoes)
 	"""
-	#import clustered trigs and vetoes
-	trig_array = np.genfromtxt(trig_file).reshape((-1,4))
-	trig_start_stop = np.zeros((len(trig_array), 2))
-	delta_t = trig_array[:,3] * 1.253059 / (np.sqrt(2.)*np.pi*trig_array[:,1])  #This appears to be the conversion between time duration and Q
-	trig_start_stop[:,0] = trig_array[:,0] - delta_t/2.
-	trig_start_stop[:,1] = trig_array[:,0] + delta_t/2.
-
+	#import clustered trigs and segments
+	with open(trig_file,'rt') as read_trig_file:
+		trig_list= list(read_trig_file)
 	seg_start_stop = np.genfromtxt(seg_file).reshape((-1,2))
-
-	#create arrays of start and end times of trigs (keeping all trigger info) and sort by tigger start time
-	tot_list = zip(trig_start_stop, trig_array)
-	tot_list = sorted(tot_list, key = lambda x:x[0][0])
 
 	#open output file
 	survive_file_nm = "%s/clustered/triggers_clustered_%s_tc%s_postveto.txt"%(ppdir, ifo, t_clust)
@@ -170,14 +158,13 @@ def constrain_2_eff_segs(trig_file, seg_file, t_clust, ifo, ppdir):
 	seg_stop = seg_start_stop[i_seg,1]
 
 	#starting at beginning, find next trig
-	for i_trig in xrange(len(tot_list)):
+	for i_trig,line in enumerate(trig_list):
 			
 		#Get start and stop times from trig:
-		trig_start = tot_list[i_trig][0][0]
-		trig_stop = tot_list[i_trig][0][1]
+		trig_time = float(line.split()[0])
 		
 		#Find first segment that has an end after the trigger start time (only iterate once all trig start times have passed segment end)
-		while seg_stop < trig_start:
+		while seg_stop < trig_time:
 			#Check to see if there is another seg
 			if i_seg >= len(seg_start_stop)-1:
 				#Not another seg so end the loop over trigs
@@ -192,23 +179,20 @@ def constrain_2_eff_segs(trig_file, seg_file, t_clust, ifo, ppdir):
 			break
 			
 		#Check to see if trig lies completely within segment
-		if (trig_start >= seg_start) and (trig_stop <= seg_stop):
+		if (trig_time >= seg_start) and (trig_time <= seg_stop):
 			#Trig lies completely within segment, so write to file
-			survive_file.write("%10.10f %10.10f %10.10f %10.10f\n"%(tot_list[i_trig][1][0],tot_list[i_trig][1][1],tot_list[i_trig][1][2],tot_list[i_trig][1][3]))
+			survive_file.write("%s"%line)
 		else:
 			#Trig does not completely lie within segment, so disregard it
 			continue
 			
 	survive_file.close()
-	
-	#Sorting by start time undoes sorting by central time, so sort by central time
-	os.system("sort %s -o %s"%(survive_file_nm, survive_file_nm))
-	
+		
 	return survive_file_nm
 
 
 ###	
-def coincidence(trig_file_1, trig_file_2, t_coin, snr_coin, ifos, t_shift, ppdir):
+def coincidence(trig_list_1, trig_list_2, t_coin, snr_coin, ifos, t_shift, ppdir):
 	"""
 	Coincide two sets of triggers, using timing and snr parameters and constraining concident triggers to have identical f_0 and Q
 	"""
@@ -218,58 +202,52 @@ def coincidence(trig_file_1, trig_file_2, t_coin, snr_coin, ifos, t_shift, ppdir
 		os.makedirs("%s/coincident/"%ppdir)
 	coin_file = open(coin_file_nm,'wt')
 	
-	#Open each file and read in lines
-	read_trig_file_1 = open(trig_file_1,'rt')
-	with open(trig_file_2,'rt') as read_trig_file_2:
-		lines_2 = list(read_trig_file_2)
-	
 	#Iterate through list 1, comparing to list 2
 	i2_min = 0
 	
-	for lin_1 in read_trig_file_1:
-		current_line = lin_1.split()
-		t_current = float(current_line[0])
-		f_current = float(current_line[1])
-		snr_current = float(current_line[2])
-		Q_current = float(current_line[3])
+	for current_line in trig_list_1:
+		current_elements = current_line.split()
+		t_current = float(current_elements[0])
+		f_current = float(current_elements[1])
+		snr_current = float(current_elements[2])
+		Q_current = float(current_elements[3])
 		
 		#Update reference index for list 2
-		t2_min = float(lines_2[i2_min].split()[0])
+		t2_min = float(trig_list_2[i2_min].split()[0]) + float(t_shift)
 		while abs(t_current - t2_min) > t_coin:
 			if (t2_min - t_current) >  t_coin:
 				break
-			elif (i2_min + 1) >= len(lines_2):
+			elif (i2_min + 1) >= len(trig_list_2):
 				break
 			else:
 				i2_min += 1
-				t2_min = float(lines_2[i2_min].split()[0])
+				t2_min = float(trig_list_2[i2_min].split()[0]) + float(t_shift)
 		
 		#Search for coincident templates within time window
 		i2_compare = i2_min
-		compare_line = lines_2[i2_compare].split()
-		t_compare = float(compare_line[0])
-		f_compare = float(compare_line[1])
-		snr_compare = float(compare_line[2])
-		Q_compare = float(compare_line[3])
+		compare_elements = trig_list_2[i2_compare].split()
+		t_compare = float(compare_elements[0]) + float(t_shift)
+		f_compare = float(compare_elements[1])
+		snr_compare = float(compare_elements[2])
+		Q_compare = float(compare_elements[3])
 		
 		while abs(t_current - t_compare) <= t_coin:
 			if (f_current == f_compare) and (Q_current == Q_compare) and (np.sqrt(snr_current**2. + snr_compare**2.) >= snr_coin):
 				coin_file.write( "%10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f %10.10f\n"%((t_current+t_compare)/2., (f_current+f_compare)/2., np.sqrt( snr_current**2. + snr_compare**2. ), (Q_current+Q_compare)/2., t_current, f_current, snr_current, Q_current, t_compare, f_compare, snr_compare, Q_compare) )
 
-			if (i2_compare + 1) >= len(lines_2):
+			if (i2_compare + 1) >= len(trig_list_2):
 				break
 
 			i2_compare += 1
-			compare_line = lines_2[i2_compare].split()
-			t_compare = float(compare_line[0])
-			f_compare = float(compare_line[1])
-			snr_compare = float(compare_line[2])
-			Q_compare = float(compare_line[3])
+			compare_elements = trig_list_2[i2_compare].split()
+			t_compare = float(compare_elements[0]) + float(t_shift)
+			f_compare = float(compare_elements[1])
+			snr_compare = float(compare_elements[2])
+			Q_compare = float(compare_elements[3])
 	
 	coin_file.close()
-	read_trig_file_1.close()
 	
-	os.system("sort %s -o %s"%(coin_file_nm, coin_file_nm))
+	os.system("sort %s -n -o %s"%(coin_file_nm, coin_file_nm))
 				
 	return coin_file_nm
 	
@@ -281,26 +259,16 @@ def time_slide(trig_file_1, trig_file_2, t_coin, snr_coin, ifos, t_shift_start, 
 		
 	#create list of time slides
 	t_shift_array = np.linspace(start=t_shift_start, stop=t_shift_stop, num=t_shift_num)
-		
-	for t_shift in t_shift_array:
-		#add time shifts in a temporary file
-		trig_file_2_tmp = trig_file_2 + '_tmp'
-		write_trig_file_2_tmp = open(trig_file_2_tmp,'wt')
-		
-		#time shift is applied to trig_file_2
-		read_trig_file_2 = open(trig_file_2,'rt')
-		for line in read_trig_file_2:
-			elements = line.split()
-			write_trig_file_2_tmp.write("%10.10f %10.10f %10.10f %10.10f\n"%(float(elements[0])+t_shift, float(elements[1]), float(elements[2]), float(elements[3])))
-		 
-		write_trig_file_2_tmp.close()
-		read_trig_file_2.close()
-		
+	
+	#load in trig arrays
+	with open(trig_file_1,'rt') as read_trig_file_1:
+		trig_list_1 = list(read_trig_file_1)
+	with open(trig_file_2,'rt') as read_trig_file_2:
+		trig_list_2 = list(read_trig_file_2)
+	
+	for t_shift in t_shift_array:				
 		#do coincidence with time-shifted files
-		coin_file_tmp = coincidence(trig_file_1=trig_file_1, trig_file_2=trig_file_2_tmp, t_coin=t_coin, snr_coin=snr_coin, ifos=ifos, t_shift=t_shift, ppdir=ppdir)
-
-		#remove the temporary time-shifted cluster file
-		os.system('rm %s'%trig_file_2_tmp)
+		coin_file_tmp = coincidence(trig_list_1=trig_list_1, trig_list_2=trig_list_2, t_coin=t_coin, snr_coin=snr_coin, ifos=ifos, t_shift=t_shift, ppdir=ppdir)
 		
 		print "Coincided trigs for %s and %s for time slide of %s"%(ifos[0], ifos[1], t_shift)
 
@@ -410,7 +378,7 @@ def cluster_LIB_trigs(LIB_trig_array, LIB_window):
 		iterations += 1
 		
 		#Initialize out_array
-		out_array = np.array([])
+		out_list = []
 		
 		#Initialize clust_flag as 0, marking no clustering yet done
 		clust_flag = 0
@@ -437,7 +405,7 @@ def cluster_LIB_trigs(LIB_trig_array, LIB_window):
 					#If there are triggers in the old window, write to file
 					found += 1
 					max_line = window_dic[max(window_dic)]
-					out_array = np.append(out_array, max_line)
+					out_list += [max_line]
 				
 				#Set start time of new window
 				t_start = t_current
@@ -451,15 +419,13 @@ def cluster_LIB_trigs(LIB_trig_array, LIB_window):
 			#If there are triggers in the old window, write to file
 			found += 1
 			max_line = window_dic[max(window_dic)]
-			out_array = np.append(out_array, max_line)	
+			out_list += [max_line]	
 
-		#Resize out_array
-		try:
-			out_array = out_array.reshape((found,-1))
-		except ValueError:
-			if len(out_array) == 0.:
-				#No trigs, can break clustering loop
-				break
+		#Turn out_list into out_array
+		out_array = np.array(out_list)
+		if len(out_array) == 0.:
+			#No trigs, can break clustering loop
+			break
 
 		#Replace initial trig array with down-selected trig array
 		in_array = out_array
@@ -502,7 +468,7 @@ def effective_segs(seg_file, veto_file, ifo, ppdir):
 
 	try:
 		veto_start_stop = np.genfromtxt(veto_file).reshape((-1,2))
-		if not veto_start_stop:
+		if not veto_start_stop.any():
 			veto_start_stop = np.array([[float('inf'), float('inf')]])
 	except IOError:
 		veto_start_stop = np.array([[float('inf'), float('inf')]])

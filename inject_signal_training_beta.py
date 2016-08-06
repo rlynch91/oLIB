@@ -46,7 +46,7 @@ os.makedirs("%s/training_injections/raw"%segdir)
 os.makedirs("%s/training_injections/merged"%segdir)
 
 #Initialize mdc parameters
-ifos_str = repr(",".join(ifos))  #"H1,L1"
+ifos_str = repr(",".join(ifos))  #"'H1,L1'"
 num_mdc = 1  #number of mdc injection frames generated
 mdc_start_time = start  #start time of mdc injection frame
 mdc_end_time = stop  #end time of mdc injection frame

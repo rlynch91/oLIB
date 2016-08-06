@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(1,'/home/ryan.lynch/numpy/numpy-1.8.2-INSTALL/lib64/python2.6/site-packages')
+sys.path.insert(1,'/home/ryan.lynch/numpy/numpy-1.8.2-INSTALL/lib64/python2.7/site-packages')
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -520,7 +520,7 @@ class LLRT(object):
 		Calculate the log likelihood ratio threshold that will produce the given FAR over the extent of the background's livetime
 		"""
 		#Calculate the number of false alarms expected over a time interval at a given FAR
-		num_back_above_thresh = int( FAR * livetime)
+		num_back_above_thresh = int( FAR * livetime + 1)
 		
 		#Sort the background LLRs from smallest to largest
 		back_LLRs = np.sort(self.log_likelihood_ratios(groundtype='Background'))
@@ -530,7 +530,7 @@ class LLRT(object):
 		elif num_back_above_thresh > len(back_LLRs):
 			print "Warning: the FAR is too high for the given number of background events to correctly determine threshold log likelihood ratio, so using smallest found LLR."
 			threshold = back_LLRs[0]
-		elif num_back_above_thresh == 0.:
+		elif num_back_above_thresh <= 0.:
 			print "Warning: the FAR is too low for the given number of background events to correctly determine threshold log likelihood ratio, so using the largest found LLR."
 			threshold = back_LLRs[-1]
 		else:

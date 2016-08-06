@@ -17,7 +17,7 @@ DATA    CHANNELS        IFO:CHNAME
 //INJECTION	FACTORS         1.0
 
 //** working sampling (one value for all channels)
-DATA    SAMPLEFREQUENCY 4096
+DATA    SAMPLEFREQUENCY SAMPFREQ
 
 //*************************************************************************************
 //************************        SEARCH PARAMETERS      *****************************
@@ -33,7 +33,7 @@ PARAMETER       SEGMENTDURATION   4
 PARAMETER       OVERLAPDURATION   OLAP 
 
 //** search frequency range
-PARAMETER       FREQUENCYRANGE  32      2048
+PARAMETER       FREQUENCYRANGE  MINFREQ      MAXFREQ
 
 //** search Q range
 PARAMETER       QRANGE          3.3166  141
@@ -44,7 +44,7 @@ PARAMETER       QRANGE          3.3166  141
 PARAMETER       MISMATCHMAX     0.2
 
 //** tile SNR threshold
-PARAMETER         SNRTHRESHOLD    5.5
+PARAMETER         SNRTHRESHOLD    THRESHSNR
 
 //*************************************************************************************
 //************************             OUTPUT            *****************************

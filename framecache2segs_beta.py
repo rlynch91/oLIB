@@ -17,7 +17,7 @@ def framecache2segs(framecache_file, chname, abs_start, abs_stop, outdir, ifo, b
 	segfile = open(outdir+'/%s_%s_%s.seg'%(ifo,abs_start,abs_stop),'wt')
 
 	#Define start and stop of current segment
-	current_start = abs_start
+	current_start = None
 	current_stop = None
 
 	#Loop over frames in the cache
@@ -60,21 +60,85 @@ def framecache2segs(framecache_file, chname, abs_start, abs_stop, outdir, ifo, b
 						segfile.write('%s %s\n'%(current_start, current_stop))
 					#Wait to start next segment until find good data
 					current_start = None
+					current_stop = None
 
 			#Check if state vector denotes that an injection is present
 			if ((int(value) & 448) != 448):  #(e.g., we want bits 6, 7, or 8 to be on)
 				inj_flag = True
 
-	#Write final segment if needed
-	if current_start:
-		if current_start < abs_stop:
-			segfile.write('%s %s\n'%(current_start, abs_stop))
+		#Write final segment for this frame if needed
+		if current_start:
+			if (current_start < int(frame_start+frame_stride)) and (int(frame_start+frame_stride) < abs_stop):
+				segfile.write('%s %s\n'%(current_start, int(frame_start+frame_stride)))
+			elif (current_start < int(frame_start+frame_stride)) and (current_start < abs_stop):
+				segfile.write('%s %s\n'%(current_start, int(abs_stop)))
+			#Wait to start next segment until find good data
+			current_start = None
+			current_stop = None
 
 	cache.close()
+	segfile.close()
 	os.system('rm %s/tmp.txt'%outdir)
 	
 	#Return injection flag
 	return inj_flag
+
+###
+def merge_segs(seg_file):
+	"""
+	For a time-sorted segment list, combine segments that are divided at a common start/stop time
+	"""
+	#Load segments into an array
+	seg_array = np.genfromtxt(seg_file).reshape((-1,2))
+	
+	#Open seg_file for overwriting
+	write_seg_file = open(seg_file,'wt')
+	
+	#If only 1 segment, nothing needs to be merged
+	if np.shape(seg_array) == (1,2):
+		write_seg_file.write("%10.10f %10.10f\n"%(seg_array[0,0],seg_array[0,1]))	
+	
+	#If more than 1 segment, loop over segments
+	else:
+		#Initialize first pair of neighboring segs
+		i_seg = 0
+		start_current = seg_array[i_seg,0]
+		stop_current = seg_array[i_seg,1]
+		
+		i_seg += 1
+		start_next = seg_array[i_seg,0]
+		stop_next = seg_array[i_seg,1]
+		
+		#Loop over all pairs of neighboring segs
+		while i_seg < len(seg_array):
+			#Check if segments need to be merged
+			if stop_current == start_next:
+				#merge current and next segments together
+				stop_current = stop_next
+			else:
+				#write current segment start and stop times
+				if start_current < stop_current:
+					write_seg_file.write("%10.10f %10.10f\n"%(start_current,stop_current))
+				#make next segment the current segment
+				start_current = start_next
+				stop_current = stop_next
+			
+			#iterate to next segment
+			if i_seg >= len(seg_array) - 1:
+				#if we've reached last seg, then break and end loop
+				break
+			else:
+				#else iterate to next segment
+				i_seg += 1
+				start_next = seg_array[i_seg,0]
+				stop_next = seg_array[i_seg,1]
+				
+		#Write final segment
+		if start_current < stop_current:
+			write_seg_file.write("%10.10f %10.10f\n"%(start_current,stop_current))
+				
+	#Close seg_file
+	write_seg_file.close()
 
 ##############################################
 if __name__=='__main__':
@@ -106,5 +170,9 @@ if __name__=='__main__':
 	#---------------------------------------------
 	
 	inj_status = framecache2segs(framecache_file=framecache_file, chname=chname, abs_start=abs_start, abs_stop=abs_stop, outdir=outdir, ifo=ifo, bitmask=bitmask)
+	try:
+		merge_segs(seg_file='%s/%s_%s_%s.seg'%(outdir,ifo,abs_start,abs_stop))
+	except IOError:
+		pass
 	print inj_status
 
